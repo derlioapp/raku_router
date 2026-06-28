@@ -1,0 +1,32 @@
+---
+title: Live demo
+description: The raku_router example app, running in your browser — navigate and watch the URL change.
+---
+
+The example app below runs as a real Flutter web build. Navigate the tabs, open a
+note, push a full-page photo — and watch the **address bar change** and browser
+**back/forward** work, with each tab keeping its own history.
+
+<div style="border:1px solid var(--sl-color-gray-5); border-radius:12px; overflow:hidden; aspect-ratio: 1 / 1; max-width: 420px; margin-inline:auto;">
+	<iframe
+		src="/raku_router/demo/index.html"
+		title="raku_router live demo"
+		loading="lazy"
+		style="border:0; width:100%; height:100%;"
+		allow="clipboard-write"
+	></iframe>
+</div>
+
+:::note[Building the demo]
+The demo is the package's `example/` app, built for web and served from
+`/raku_router/demo/` (the site's GitHub Pages base). To (re)generate it:
+
+```bash
+cd example
+flutter build web --base-href /raku_router/demo/
+cp -R build/web/* ../website/public/demo/
+```
+
+For runnable *snippets* (rather than the whole app), embed
+[DartPad](https://dartpad.dev) iframes the way the Flutter docs do.
+:::

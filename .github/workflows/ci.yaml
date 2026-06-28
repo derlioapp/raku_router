@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  verify:
+    name: format · guard · analyze · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test example
+      - name: Forbidden-import guard
+        run: tool/check_forbidden_imports.sh
+      - name: Analyze (fatal infos + warnings)
+        run: flutter analyze --fatal-infos --fatal-warnings
+      - name: Test
+        run: flutter test
+
+  pana:
+    name: pana 160/160
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install pana
+        run: dart pub global activate pana
+      - name: pana — require the full pub score
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          pana --no-warning --json . > pana.json
+          granted=$(jq '.scores.grantedPoints' pana.json)
+          max=$(jq '.scores.maxPoints' pana.json)
+          echo "pana score: $granted/$max"
+          test "$granted" -ge "$max"
+
+  floor:
+    name: floor (Flutter 3.27)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The declared SDK floor — proves raku_router compiles on Flutter 3.27 / Dart
+      # 3.6, the lowest it claims to support.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze --fatal-infos --fatal-warnings
+      - run: flutter test

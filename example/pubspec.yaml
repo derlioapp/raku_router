@@ -1,0 +1,23 @@
+name: raku_router_example
+description: Example app demonstrating raku_router (tabs, guard, redirect, deep link).
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  raku_router:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # ^5 to match raku_router's Dart 3.6 floor (flutter_lints 6 needs Dart ^3.8).
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

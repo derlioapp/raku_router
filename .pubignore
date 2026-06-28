@@ -1,0 +1,14 @@
+# Generated, build, and analysis output — regenerated, never shipped to pub.dev.
+/build/
+/coverage/
+/doc/
+.dart_tool/
+
+# Example build artifacts (the web build is mirrored into the docs site, not the
+# package). The example's source — lib/, web/, pubspec — still ships.
+example/build/
+example/.dart_tool/
+
+# Repo-only docs and the docs site — not shipped in the published package.
+/design/
+/website/

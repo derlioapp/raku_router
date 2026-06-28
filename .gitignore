@@ -1,0 +1,22 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+coverage/
+doc/
+pubspec.lock
+*.log
+
+# Example build artifacts (the web build is mirrored into the docs site)
+example/build/
+example/.dart_tool/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# (website/ has its own .gitignore for node_modules, dist, public/demo)
+
+.claude

@@ -1,0 +1,84 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'example/**'
+      - '.github/workflows/docs.yaml'
+  workflow_dispatch:
+
+# Needed for the GitHub Pages deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; let in-progress runs finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build docs (Starlight + Flutter demo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Enable GitHub Pages (Actions source) from the workflow itself, so the
+      # deploy doesn't require a manual one-time toggle in repo settings.
+      - uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      # 1. Build the live demo: the example app, compiled for web into /demo/.
+      #    base-href matches the Pages base (/raku_router) + the /demo/ mount point.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build the live demo (Flutter web)
+        working-directory: example
+        run: |
+          flutter create . --platforms web
+          flutter build web --base-href /raku_router/demo/ --no-tree-shake-icons
+          mkdir -p "$GITHUB_WORKSPACE/website/public/demo"
+          cp -R build/web/* "$GITHUB_WORKSPACE/website/public/demo/"
+
+      # 2. Build the Starlight site (which now includes public/demo).
+      # Version pinned here: the `packageManager` field lives in
+      # website/package.json, but this action runs at the repo root and can't
+      # see it, so it must be told the version explicitly.
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+      - name: Build the site
+        working-directory: website
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # 3. .nojekyll keeps GitHub Pages from stripping Astro's _astro/ assets.
+      - name: Upload Pages artifact
+        run: touch website/dist/.nojekyll
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/dist
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

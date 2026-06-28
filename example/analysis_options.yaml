@@ -1,0 +1,8 @@
+# The example is a demonstration app, not a published API surface, so it is not
+# held to public_member_api_docs. It otherwise follows flutter_lints.
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    public_member_api_docs: false
+    prefer_single_quotes: true

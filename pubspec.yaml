@@ -1,0 +1,42 @@
+name: raku_router
+description: >-
+  A tiny, code-generation-free, UI-agnostic router for Flutter: type-safe sealed
+  routes, declarative deep linking, and built-in nested tabs with per-branch
+  back stacks.
+version: 0.1.0
+
+homepage: https://derlioapp.github.io/raku_router/
+repository: https://github.com/derlioapp/raku_router
+issue_tracker: https://github.com/derlioapp/raku_router/issues
+topics:
+  - router
+  - navigation
+  - deep-linking
+  - tabs
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+environment:
+  # True floor: NavigatorPopHandler.onPopWithResult (Flutter 3.27 → Dart 3.6.0)
+  # is the newest API the code uses; declare the widest range that still compiles.
+  sdk: '>=3.6.0 <4.0.0'
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  # ^5 (not ^6): flutter_lints 6 requires Dart ^3.8, which would break the
+  # declared SDK floor (Dart 3.6 / Flutter 3.27). 5.x supports 3.6.
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
