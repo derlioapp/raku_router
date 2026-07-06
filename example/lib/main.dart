@@ -55,6 +55,15 @@ class Photo extends AppRoute {
   List<Object?> get props => [id];
 }
 
+/// A typed catch-all: any URL no concrete route claims lands here, carrying the
+/// unmatched tail so the 404 screen can show what was attempted.
+class NotFound extends AppRoute {
+  const NotFound(this.attempted);
+  final String attempted;
+  @override
+  List<Object?> get props => [attempted];
+}
+
 // ---------------------------------------------------------------------------
 // One declarative route TREE: each node is "a URL ↔ a typed screen". The URL's
 // structure rebuilds the navigation stack, so a deep link to /feed/notes/2 opens
@@ -90,12 +99,14 @@ final router = raku(
             '/feed',
             (_) => const Feed(),
             (_) => const FeedScreen(),
+            title: (_) => 'Feed · raku_router', // sets the browser tab title
             children: [
               // /feed/notes/:id — nested, so it stacks on top of Feed.
               route(
                 'notes/:id',
                 (p) => Note(p('id')),
                 (n) => NoteScreen(id: n.id),
+                title: (n) => 'Note ${n.id} · raku_router',
               ),
             ],
           ),
@@ -105,11 +116,13 @@ final router = raku(
             '/settings',
             (_) => const Settings(),
             (_) => const SettingsScreen(),
+            title: (_) => 'Settings · raku_router',
             children: [
               route(
                 'edit',
                 (_) => const EditProfile(),
                 (_) => const EditProfileScreen(),
+                title: (_) => 'Edit profile · raku_router',
               ),
             ],
           ),
@@ -117,7 +130,21 @@ final router = raku(
       ],
     ),
     // A top-level route is full-page — it sits above the shell and covers the bar.
-    route('/photo/:id', (p) => Photo(p('id')), (n) => PhotoScreen(id: n.id)),
+    route(
+      '/photo/:id',
+      (p) => Photo(p('id')),
+      (n) => PhotoScreen(id: n.id),
+      title: (p) => 'Photo · ${p.id}',
+    ),
+    // A trailing `*` is a typed catch-all: any URL nothing else claims lands on
+    // NotFound, with the unmatched tail available as `p.rest`. Full-page, above
+    // the shell — and the address bar keeps the URL the user actually hit.
+    route(
+      '*',
+      (p) => NotFound(p.rest),
+      (n) => NotFoundScreen(attempted: n.attempted),
+      title: (_) => 'Not found · raku_router',
+    ),
   ],
 );
 
@@ -151,6 +178,12 @@ class FeedScreen extends StatelessWidget {
             leading: const Icon(Icons.photo),
             title: const Text('Open full-screen photo (covers the bar)'),
             onTap: () => context.push(const Photo('sunset')), // full-page
+          ),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Visit an unknown route (typed 404)'),
+            subtitle: const Text('Or type a bad URL in the address bar'),
+            onTap: () => context.push(const NotFound('feed/does-not-exist')),
           ),
         ],
       ),
@@ -245,6 +278,32 @@ class PhotoScreen extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 20),
             ),
             TextButton(onPressed: context.pop, child: const Text('Close')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class NotFoundScreen extends StatelessWidget {
+  const NotFoundScreen({super.key, required this.attempted});
+
+  /// The unmatched URL tail, from `RouteParams.rest`.
+  final String attempted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Not found')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.explore_off, size: 48),
+            const SizedBox(height: 12),
+            Text("Couldn't find /$attempted"),
+            const SizedBox(height: 12),
+            TextButton(onPressed: context.pop, child: const Text('Go back')),
           ],
         ),
       ),

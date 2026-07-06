@@ -234,6 +234,23 @@ extension RouteStackContext on BuildContext {
 
   /// Replaces the top route of the nearest stack. Stack-local, like [pop].
   Future<void> replace(RakuRoute route) => routeStack.replace(route);
+
+  /// Like [replace], but updates the address bar **in place** — no new browser
+  /// history entry, so back/forward skips it. Use for transient URL state you
+  /// don't want to litter history: a search query, an active filter, a within-
+  /// page selection you still want to be shareable/restorable.
+  ///
+  /// Wraps Flutter's [Router.neglect]. Outside a deep-linked ([raku]) app there
+  /// is no Router (and no URL), so it degrades to a plain [replace]. Meant for
+  /// plain routes; a `RouteRedirect` resolves asynchronously, after the neglect
+  /// window closes, so its history entry is not suppressed.
+  void replaceSilently(RakuRoute route) {
+    if (Router.maybeOf(this) == null) {
+      replace(route);
+      return;
+    }
+    Router.neglect(this, () => replace(route));
+  }
 }
 
 /// Wraps a [RouteGuard] route's screen in a [PopScope] so its [RouteGuard.canPop]

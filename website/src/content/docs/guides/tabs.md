@@ -41,7 +41,17 @@ final router = raku(
 
 Branches build **lazily** (a tab's `Navigator` is created the first time it is
 shown) and are then cached and kept alive, so state and scroll positions survive
-tab switches. Each branch gets its own `HeroController`.
+tab switches. Each branch gets its own `HeroController`. Because a branch's
+subtree isn't built until its tab is first activated, an app with many tabs
+doesn't spin up every tab's screens on the first frame — only the active one.
+
+:::note[Switching tabs is instant, by design]
+`transitionsBuilder` animates **pushes within a branch's stack**. Switching
+between branches is an instant `IndexedStack` swap — *not* animated — and that's
+deliberate: each branch's `Navigator` stays alive so its stack, scroll, and state
+are preserved. If you want a cross-fade between tabs, wrap `child` in the shell
+builder with your own `AnimatedSwitcher` keyed on `tabs.index`.
+:::
 
 ## Without deep linking
 

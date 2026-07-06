@@ -33,6 +33,15 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
   `p.asInt('id')`, `p.optionalInt`, and `?query` via `p.query('q')`.
   (`route_params_test`, `route_node_test`)
 - **Unknown URLs fall back** through `onUnknown`. (`tree_router_test`)
+- **Catch-all `*` routes (typed 404)** — a trailing `*` matches any URL no
+  concrete route claims: concrete beats wildcard, the most-specific wildcard
+  wins, else it falls through to `onUnknown`. Scoped under a subtree it renders
+  inside that tab; at the top level it's global. The unmatched tail arrives typed
+  via `RouteParams.rest`, and the route round-trips so the 404 URL is preserved.
+  (`catch_all_test`, `path_pattern_test`)
+- **Route → URL is public** — `raku(...)` returns a `RakuRouter` exposing
+  `uriOf(route)` / `hrefOf(route)` (the tree's reverse direction) for share
+  links, deep links, and `<a href>`s. (`href_test`)
 - **No code generation** — routes are sealed classes + an exhaustive `switch`.
 
 ## Tabs (preserved, parallel branches) _(tree)_
@@ -84,6 +93,13 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
 - **`raku(onNavigation:)`** reports the active leaf as a typed `RakuRoute`
   after every change that moves it (push, pop, tab switch, browser back/forward),
   once per change, and not for the initial route. (`on_navigation_test`)
+- **`raku(observers:)`** attaches raw `NavigatorObserver`s (e.g.
+  `FirebaseAnalyticsObserver`) via a *factory*: called once per navigator (root +
+  each tab branch), each gets fresh instances — proven a branch's observer is
+  created only when its tab is first shown, and sees in-tab pushes. (`observers_test`)
+- **`context.replaceSilently(route)`** updates the address bar in place with no
+  new history entry (wrapping `Router.neglect`), degrading to `replace` when
+  there is no enclosing `Router`. (`replace_silently_test`)
 - **Value equality from `(runtimeType, props)`** with separate process-unique page
   identity, so equal routes coexist on the stack. (`raku_router_test`)
 - **`reset` is idempotent** — re-rooting to the route you're already on doesn't
@@ -123,6 +139,10 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
   case without restoration). The active tab is restored too. (`restoration_test`)
 - **System back** pops the active stack and **a guard vetoes it**.
   (`system_back_test`)
+- **Browser tab titles** — `route(..., title: (route) => '…')` sets the active
+  leaf's tab / task-switcher label via `SystemChrome.setApplicationSwitcherDescription`
+  (the same call Flutter's `Title` widget makes), only when it changes. Opt-in:
+  the platform is untouched when no route declares a `title`. (`title_test`)
 - **`onDidRemovePage` keeps the stack in sync** after an imperative
   `Navigator.pop`. (`page_transition_test`)
 - **Material/Cupertino-free `lib/`** (CI-guarded) — drops into any design system.

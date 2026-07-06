@@ -105,6 +105,12 @@ class BranchedRouteStack extends ChangeNotifier {
 /// tabs doesn't spin up every tab's stack at launch. Once built, a branch is
 /// cached and kept alive, so its state survives later tab switches and it is
 /// never rebuilt by navigation elsewhere.
+///
+/// Switching branches is an **instant** [IndexedStack] swap, not an animated
+/// transition — deliberately, so each branch's `Navigator` (and its stack,
+/// scroll, and state) is preserved. `transitionsBuilder` animates pushes
+/// *within* a branch; to animate the tab switch itself, wrap the active [child]
+/// in your shell builder with an `AnimatedSwitcher`.
 class BranchedStackView extends StatefulWidget {
   /// Creates a view that renders [controller]'s active branch.
   const BranchedStackView({
@@ -112,6 +118,7 @@ class BranchedStackView extends StatefulWidget {
     required this.controller,
     required this.builder,
     this.pageBuilder,
+    this.observers,
     this.transitionsBuilder = RakuTransitions.fade,
     this.transitionDuration = const Duration(milliseconds: 250),
     this.resolveTransition,
@@ -126,6 +133,14 @@ class BranchedStackView extends StatefulWidget {
 
   /// Optional custom default page factory.
   final RakuPageBuilder? pageBuilder;
+
+  /// Builds the [NavigatorObserver]s for a branch's [Navigator]. Called **once
+  /// per branch** (on that branch's first build), so every branch gets its own
+  /// fresh observer instances — a single [NavigatorObserver] can only be
+  /// attached to one [Navigator], so the same instance can't be shared across
+  /// branches. Return the observers you want on each tab's navigator (e.g. a
+  /// fresh `FirebaseAnalyticsObserver`).
+  final List<NavigatorObserver> Function()? observers;
 
   /// Default transition for branches that don't use `RouteTransition`.
   final RouteTransitionsBuilder transitionsBuilder;
@@ -175,6 +190,7 @@ class _BranchedStackViewState extends State<BranchedStackView> {
         stack: widget.controller.branches[i].stack,
         builder: widget.builder,
         pageBuilder: widget.pageBuilder,
+        observers: widget.observers?.call() ?? const <NavigatorObserver>[],
         transitionsBuilder: widget.transitionsBuilder,
         transitionDuration: widget.transitionDuration,
         resolveTransition: widget.resolveTransition,

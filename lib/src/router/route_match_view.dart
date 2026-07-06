@@ -20,6 +20,7 @@ class LiveLocation {
     List<RouteMatch> matches, {
     this.transitionsBuilder = RakuTransitions.fade,
     this.transitionDuration = const Duration(milliseconds: 250),
+    this.observers,
   }) {
     root = _buildStack(matches);
   }
@@ -32,6 +33,18 @@ class LiveLocation {
 
   /// Default transition duration.
   final Duration transitionDuration;
+
+  /// Builds fresh [NavigatorObserver]s for each navigator in the live tree (the
+  /// root and every branch). Called once per navigator, so no observer instance
+  /// is shared across two [Navigator]s.
+  final List<NavigatorObserver> Function()? observers;
+
+  // The root navigator's observers, built once. `render` runs on every delegate
+  // rebuild, so the factory must not be re-called there — that would swap in
+  // fresh instances (leaking, and resetting stateful observers) each rebuild.
+  // Each branch's observers are memoised the same way inside BranchedStackView.
+  late final List<NavigatorObserver> _rootObservers =
+      observers?.call() ?? const <NavigatorObserver>[];
 
   /// The root stack (its top may be a shell sentinel or a full-page screen).
   late final RouteStack root;
@@ -157,6 +170,7 @@ class LiveLocation {
       stack: root,
       builder: _screenFor,
       navigatorKey: navigatorKey,
+      observers: _rootObservers,
       transitionsBuilder: transitionsBuilder,
       transitionDuration: transitionDuration,
       resolveTransition: _transitionFor,
@@ -173,6 +187,7 @@ class LiveLocation {
         BranchedStackView(
           controller: live.controller,
           builder: _screenFor, // recursive: nested shells resolve here too
+          observers: observers,
           transitionsBuilder: transitionsBuilder,
           transitionDuration: transitionDuration,
           resolveTransition: _transitionFor,

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../page.dart';
@@ -21,6 +22,14 @@ import 'route_node.dart';
 /// that moves it — a push, pop, tab switch, or browser back/forward — once per
 /// change, and not for the initial route (you already have `initial`).
 ///
+/// Pass [observers] to attach `NavigatorObserver`s (e.g. `FirebaseAnalyticsObserver`,
+/// `SentryNavigatorObserver`) to the navigators. It is a **factory**, not a list:
+/// a single observer instance can only attach to one `Navigator`, and Raku builds
+/// several (the root plus one per tab branch), so the factory is called once per
+/// navigator to give each its own fresh instances — this way an observer sees
+/// in-tab pushes too, not just top-level ones. (For plain route-name analytics,
+/// [onNavigation] is simpler and already covers every navigator.)
+///
 /// ```dart
 /// MaterialApp.router(routerConfig: raku(
 ///   initial: const Feed(),
@@ -35,13 +44,14 @@ import 'route_node.dart';
 ///   ],
 /// ));
 /// ```
-RouterConfig<RakuRoute> raku({
+RakuRouter raku({
   required List<RouteNode> routes,
   required RakuRoute initial,
   RakuRoute Function(Uri uri)? onUnknown,
   RouteTransitionsBuilder? transition,
   Duration transitionDuration = RakuTransitions.slideInDuration,
   void Function(RakuRoute route)? onNavigation,
+  List<NavigatorObserver> Function()? observers,
 }) {
   final tree = RouteTree(routes);
   final delegate = _TreeRouterDelegate(
@@ -50,8 +60,10 @@ RouterConfig<RakuRoute> raku({
     transitionsBuilder: transition ?? RakuTransitions.slideIn(),
     transitionDuration: transitionDuration,
     onNavigation: onNavigation,
+    observers: observers,
   );
-  return RouterConfig<RakuRoute>(
+  return RakuRouter._(
+    tree: tree,
     routerDelegate: delegate,
     routeInformationParser: _TreeParser(tree, onUnknown ?? (_) => initial),
     routeInformationProvider: PlatformRouteInformationProvider(
@@ -59,6 +71,36 @@ RouterConfig<RakuRoute> raku({
     ),
     backButtonDispatcher: RootBackButtonDispatcher(),
   );
+}
+
+/// The [RouterConfig] that [raku] returns. Beyond driving `MaterialApp.router`,
+/// it exposes the route tree's **route → URL** direction — previously reachable
+/// only inside the package — so you can turn a typed route into its location for
+/// a share link, a deep link, or an `<a href>` on the web.
+class RakuRouter extends RouterConfig<RakuRoute> {
+  RakuRouter._({
+    required RouteTree tree,
+    required super.routerDelegate,
+    required super.routeInformationParser,
+    required super.routeInformationProvider,
+    required super.backButtonDispatcher,
+  }) : _tree = tree;
+
+  final RouteTree _tree;
+
+  /// The location [route] maps to (path `:params` + any `?query`) — the exact
+  /// URL the address bar shows when [route] is the active leaf, built by the
+  /// same tree that parses URLs, so it always stays in sync. Asserts if [route]
+  /// has no `route(...)` node.
+  Uri uriOf(RakuRoute route) => _tree.locationOf(route);
+
+  /// [uriOf] rendered as a string — the `href` for an anchor or share link,
+  /// e.g. `hrefOf(const Note('42'))` → `'/feed/notes/42'`.
+  ///
+  /// This is the app-internal location. It matches the browser address bar
+  /// under the path URL strategy (`usePathUrlStrategy`); under the default hash
+  /// strategy the bar shows it after a `#`, so prefix a real anchor with `#`.
+  String hrefOf(RakuRoute route) => uriOf(route).toString();
 }
 
 // The deepest active screen route of a resolved location.
@@ -79,6 +121,7 @@ class _TreeRouterDelegate extends RouterDelegate<RakuRoute>
     required this.transitionsBuilder,
     required this.transitionDuration,
     this.onNavigation,
+    this.observers,
   }) {
     _setLocation(tree.locationOf(initial));
     _lastLeaf = _location.activeLeaf;
@@ -87,6 +130,9 @@ class _TreeRouterDelegate extends RouterDelegate<RakuRoute>
   final RouteTree tree;
   final RouteTransitionsBuilder transitionsBuilder;
   final Duration transitionDuration;
+
+  /// Builds fresh navigator observers for the root and each branch navigator.
+  final List<NavigatorObserver> Function()? observers;
 
   /// Reports the active leaf route after every navigation that changes it.
   final void Function(RakuRoute route)? onNavigation;
@@ -106,6 +152,7 @@ class _TreeRouterDelegate extends RouterDelegate<RakuRoute>
       tree.match(uri)!,
       transitionsBuilder: transitionsBuilder,
       transitionDuration: transitionDuration,
+      observers: observers,
     )..addListener(_handleChange);
   }
 
@@ -123,8 +170,25 @@ class _TreeRouterDelegate extends RouterDelegate<RakuRoute>
   @override
   RakuRoute get currentConfiguration => _location.activeLeaf;
 
+  // The last title pushed to the platform, so we call the channel only when it
+  // changes (build runs on every navigation).
+  String? _lastTitle;
+
+  // Mirror Flutter's own Title widget: set the browser tab / task-switcher
+  // label from the active leaf's `title:`. A no-op — never touching the
+  // platform — when no route declares a title, so the feature stays opt-in.
+  void _applyTitle() {
+    final title = tree.titleFor(currentConfiguration);
+    if (title == null || title == _lastTitle) return;
+    _lastTitle = title;
+    SystemChrome.setApplicationSwitcherDescription(
+      ApplicationSwitcherDescription(label: title),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    _applyTitle();
     return RakuNavigator(
       onPush: _push,
       child: _location.render(

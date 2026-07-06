@@ -2,7 +2,7 @@
 /// `:params` and the `?query` parameters.
 ///
 /// Passed to a route's `parse` function so it can build a typed route object,
-/// e.g. `(p) => Note(p('id'))` or `(p) => Search(p.query('q'))`.
+/// e.g. `(p) => Note(p('id'))` or `(p) => Search(p.query('q') ?? '')`.
 class RouteParams {
   /// Wraps the captured path [_values] and the URL's [_query] parameters.
   RouteParams(this._values, [this._query = const <String, String>{}]);
@@ -31,6 +31,12 @@ class RouteParams {
 
   /// The `?query` parameter [name], or null if it was not present.
   String? query(String name) => _query[name];
+
+  /// The catch-all remainder for a wildcard (`*`) route — the unmatched path
+  /// tail (e.g. `garbage/x` for `/feed/*` matched against `/feed/garbage/x`),
+  /// or `''` when the wildcard matched no extra segments. Use it to build a
+  /// typed not-found route: `route('*', (p) => NotFound(p.rest), …)`.
+  String get rest => _values['*'] ?? '';
 }
 
 /// The URL-shaped value a route encodes to: its path `:params` and, optionally,
@@ -44,7 +50,7 @@ class RouteParams {
 /// route('/users/:org/:id', (p) => Member(p('org'), p('id')),
 ///     (m) => MemberScreen(m), encode: (m) => RoutePath({'org': m.org, 'id': m.id}));
 ///
-/// route('/search', (p) => Search(p.query('q')), (s) => SearchScreen(s),
+/// route('/search', (p) => Search(p.query('q') ?? ''), (s) => SearchScreen(s),
 ///     encode: (s) => RoutePath(const {}, query: {'q': s.term}));
 /// ```
 class RoutePath {

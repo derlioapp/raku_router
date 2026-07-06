@@ -33,6 +33,7 @@ class ScreenNode extends RouteNode {
     required this.screen,
     this.encode,
     this.transition,
+    this.title,
     this.children = const <ScreenNode>[],
   });
 
@@ -55,6 +56,10 @@ class ScreenNode extends RouteNode {
 
   /// Optional transition for this node's page.
   final RouteTransitionsBuilder? transition;
+
+  /// Builds the browser tab / task-switcher title for a route of this node's
+  /// [type], or null to leave the title unchanged.
+  final String Function(RakuRoute route)? title;
 
   /// Nested screens whose URLs extend this one (and stack on top of it).
   final List<ScreenNode> children;
@@ -85,6 +90,21 @@ class TabsNode extends RouteNode {
 /// `:param`, or carries `?query` state, so it can't be auto-derived from the
 /// route's single prop. Without it, a zero/one-param path's URL is built
 /// automatically.
+///
+/// A trailing `*` makes a **catch-all** (wildcard) route — a typed 404 for any
+/// URL not matched by a concrete route. Nest it under a section for a
+/// subtree-scoped not-found, or put it at the top level for a global one; the
+/// most specific catch-all wins, and a concrete route always beats a wildcard.
+/// The unmatched tail arrives via [RouteParams.rest], so the caught URL
+/// round-trips:
+///
+/// ```dart
+/// route('*', (p) => NotFound(p.rest), (n) => NotFoundScreen(path: n.path));
+/// ```
+///
+/// [title] sets the browser tab / task-switcher label while a route of this
+/// node is the active leaf — derive it from the route so detail pages read well:
+/// `route('notes/:id', …, title: (n) => 'Note ${n.id}')`.
 ScreenNode route<R extends RakuRoute>(
   String path,
   R Function(RouteParams params) parse,
@@ -92,6 +112,7 @@ ScreenNode route<R extends RakuRoute>(
   RoutePath Function(R route)? encode,
   List<ScreenNode> children = const <ScreenNode>[],
   RouteTransitionsBuilder? transition,
+  String Function(R route)? title,
 }) {
   return ScreenNode(
     path: path,
@@ -100,6 +121,7 @@ ScreenNode route<R extends RakuRoute>(
     screen: (route) => screen(route as R),
     encode: encode == null ? null : (route) => encode(route as R),
     transition: transition,
+    title: title == null ? null : (route) => title(route as R),
     children: children,
   );
 }
@@ -189,12 +211,21 @@ class RouteTree {
   /// Resolves [uri] to a stack of matches, or null if nothing matches. A
   /// top-level tabs shell is always the base of the stack (so a full-page route
   /// sits above it); the others stack on top.
-  List<RouteMatch>? match(Uri uri) {
+  ///
+  /// Matching runs in two passes: a **strict** pass that ignores catch-all
+  /// (`*`) nodes, then a **catch-all** pass. So a concrete route always beats a
+  /// wildcard, and the deepest matching wildcard (a subtree `/feed/*`) beats a
+  /// shallower one (a top-level `/*`); if neither pass matches, `match` returns
+  /// null and the caller's global `onUnknown` takes over.
+  List<RouteMatch>? match(Uri uri) =>
+      _matchAt(uri, allowCatchAll: false) ?? _matchAt(uri, allowCatchAll: true);
+
+  List<RouteMatch>? _matchAt(Uri uri, {required bool allowCatchAll}) {
     final shell = roots.whereType<TabsNode>().firstOrNull;
 
     // A URL inside the shell resolves to just the shell (with the active branch).
     if (shell != null) {
-      final inside = _matchTabs(shell, '', uri);
+      final inside = _matchTabs(shell, '', uri, allowCatchAll);
       if (inside != null) return inside;
     }
 
@@ -202,7 +233,7 @@ class RouteTree {
     // shell (kept at its initial state underneath).
     for (final node in roots) {
       if (node is ScreenNode) {
-        final screenStack = _matchScreen(node, '', uri);
+        final screenStack = _matchScreen(node, '', uri, allowCatchAll);
         if (screenStack != null) {
           return <RouteMatch>[
             if (shell != null) _tabsInitial(shell, ''),
@@ -214,19 +245,29 @@ class RouteTree {
     return null;
   }
 
-  List<RouteMatch>? _matchNodes(List<RouteNode> nodes, String parent, Uri uri) {
+  List<RouteMatch>? _matchNodes(
+    List<RouteNode> nodes,
+    String parent,
+    Uri uri,
+    bool allowCatchAll,
+  ) {
     for (final node in nodes) {
       final matched = switch (node) {
-        ScreenNode() => _matchScreen(node, parent, uri),
-        TabsNode() => _matchTabs(node, parent, uri),
+        ScreenNode() => _matchScreen(node, parent, uri, allowCatchAll),
+        TabsNode() => _matchTabs(node, parent, uri, allowCatchAll),
       };
       if (matched != null) return matched;
     }
     return null;
   }
 
-  List<RouteMatch>? _matchScreen(ScreenNode node, String parent, Uri uri) {
-    final chain = _screenChain(node, parent, uri);
+  List<RouteMatch>? _matchScreen(
+    ScreenNode node,
+    String parent,
+    Uri uri,
+    bool allowCatchAll,
+  ) {
+    final chain = _screenChain(node, parent, uri, allowCatchAll);
     if (chain == null) return null;
     final params = RouteParams(chain.params, uri.queryParameters);
     return <RouteMatch>[
@@ -238,10 +279,12 @@ class RouteTree {
     ScreenNode node,
     String parent,
     Uri uri,
+    bool allowCatchAll,
   ) {
     final full = _join(parent, node.path);
+    // Children first, so a deeper concrete match wins over this node.
     for (final child in node.children) {
-      final deeper = _screenChain(child, full, uri);
+      final deeper = _screenChain(child, full, uri, allowCatchAll);
       if (deeper != null) {
         return (
           nodes: <ScreenNode>[node, ...deeper.nodes],
@@ -249,14 +292,23 @@ class RouteTree {
         );
       }
     }
-    final captured = PathPattern(full).match(uri.path);
+    final pattern = _patternByType[node.type]!;
+    // A catch-all node only matches in the second (catch-all) pass, so any
+    // concrete route — at this level or deeper — is preferred.
+    if (pattern.isCatchAll && !allowCatchAll) return null;
+    final captured = pattern.match(uri.path);
     if (captured != null) return (nodes: <ScreenNode>[node], params: captured);
     return null;
   }
 
-  List<RouteMatch>? _matchTabs(TabsNode node, String parent, Uri uri) {
+  List<RouteMatch>? _matchTabs(
+    TabsNode node,
+    String parent,
+    Uri uri,
+    bool allowCatchAll,
+  ) {
     for (var i = 0; i < node.branches.length; i++) {
-      final inner = _matchNodes(node.branches[i], parent, uri);
+      final inner = _matchNodes(node.branches[i], parent, uri, allowCatchAll);
       if (inner != null) {
         return <RouteMatch>[
           TabsMatch(node, i, <List<RouteMatch>>[
@@ -317,6 +369,11 @@ class RouteTree {
   /// The transition for [route], or null to use the host default.
   RouteTransitionsBuilder? transitionFor(RakuRoute route) =>
       _nodeFor(route).transition;
+
+  /// The browser tab / task-switcher title for [route], or null when its node
+  /// declares no `title:` (or [route] has no node, e.g. a shell sentinel).
+  String? titleFor(RakuRoute route) =>
+      _nodeByType[route.runtimeType]?.title?.call(route);
 
   PathPattern _patternFor(RakuRoute route) {
     final pattern = _patternByType[route.runtimeType];

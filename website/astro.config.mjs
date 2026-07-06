@@ -74,6 +74,7 @@ export default defineConfig({
 						{ label: 'Bottom-nav app', slug: 'recipes/bottom-nav' },
 						{ label: 'Auth / redirect gate', slug: 'recipes/auth-gate' },
 						{ label: 'Deep link to a detail screen', slug: 'recipes/deep-link-detail' },
+						{ label: 'Not-found (404) pages', slug: 'recipes/not-found' },
 						{ label: 'Unsaved-changes guard', slug: 'recipes/unsaved-changes' },
 						{ label: 'Screen-view analytics', slug: 'recipes/analytics' },
 						{ label: 'Clean web URLs', slug: 'recipes/web-urls' },

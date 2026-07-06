@@ -2,9 +2,8 @@
 
 A small app demonstrating [raku_router](https://pub.dev/packages/raku_router): a
 declarative route tree with **tabs** (each keeping its own back stack), a
-**`RouteGuard`** (blocks back while there are unsaved changes), a
-**`RouteRedirect`**, **deep linking**, and a **full-page route** that covers the
-tab shell.
+**`RouteGuard`** (blocks back while there are unsaved changes), **deep linking**,
+and a **full-page route** that covers the tab shell.
 
 ```bash
 flutter run

@@ -96,6 +96,56 @@ void main() {
     });
   });
 
+  group('catch-all (*)', () {
+    test('isCatchAll flags a trailing wildcard', () {
+      expect(PathPattern('/feed/*').isCatchAll, isTrue);
+      expect(PathPattern('/feed/:id').isCatchAll, isFalse);
+      expect(PathPattern('*').isCatchAll, isTrue);
+    });
+
+    test('captures the remaining path under "*"', () {
+      expect(PathPattern('/feed/*').match('/feed/a/b/c'), {'*': 'a/b/c'});
+      expect(PathPattern('*').match('/anything/here'), {'*': 'anything/here'});
+    });
+
+    test('matches its bare prefix with an empty remainder', () {
+      expect(PathPattern('/feed/*').match('/feed'), {'*': ''});
+    });
+
+    test('requires the fixed leading segments to match', () {
+      expect(PathPattern('/feed/*').match('/settings/x'), isNull);
+      expect(PathPattern('/feed/notes/*').match('/feed'), isNull);
+    });
+
+    test('mixes fixed params with the catch-all', () {
+      expect(
+        PathPattern('/u/:id/*').match('/u/7/a/b'),
+        {'id': '7', '*': 'a/b'},
+      );
+    });
+
+    test('round-trips a multi-segment remainder', () {
+      final p = PathPattern('/feed/*');
+      expect(p.fill({'*': 'a/b/c'}), '/feed/a/b/c');
+      expect(p.fill(p.match('/feed/a/b/c')!), '/feed/a/b/c');
+    });
+
+    test('an empty remainder fills to the bare prefix', () {
+      expect(PathPattern('/feed/*').fill({'*': ''}), '/feed');
+      expect(PathPattern('*').fill({'*': ''}), '/');
+    });
+
+    test('percent round-trips each remainder segment', () {
+      final p = PathPattern('/feed/*');
+      expect(p.match('/feed/hello%20world/x'), {'*': 'hello world/x'});
+      expect(p.fill({'*': 'hello world/x'}), '/feed/hello%20world/x');
+    });
+
+    test('a non-terminal catch-all trips an assertion', () {
+      expect(() => PathPattern('/feed/*/edit'), throwsA(isA<AssertionError>()));
+    });
+  });
+
   test('match and fill round-trip', () {
     final p = PathPattern('/users/:uid/posts/:pid');
     final params = p.match('/users/7/posts/9')!;

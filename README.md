@@ -166,6 +166,18 @@ raku(initial: const Home(), routes: [...],
     onNavigation: (route) => analytics.screen(route.name));
 ```
 
+For packages that want a raw `NavigatorObserver` (`FirebaseAnalyticsObserver`,
+`SentryNavigatorObserver`, a `RouteObserver` for `RouteAware` widgets), pass
+`observers:`. It's a **factory**, not a list — Raku builds several navigators
+(the root plus one per tab branch) and a single observer instance can attach to
+only one, so the factory is called once per navigator to give each fresh
+instances (this way an observer sees in-tab pushes, not just top-level ones):
+
+```dart
+raku(initial: const Home(), routes: [...],
+    observers: () => [FirebaseAnalyticsObserver(analytics: analytics)]);
+```
+
 **Tabs** are a node: `tabs(shell: ..., branches: [...])`. A route inside a branch
 navigates **within its tab** (the shell stays put, only the content animates); a
 `route(...)` at the top level (a sibling of the `tabs(...)` node) is **full-page**
@@ -194,6 +206,38 @@ final router = raku(
   ],
 );
 ```
+
+## Not found (catch-all)
+
+A trailing `*` is a **catch-all**: a typed 404 for any URL a concrete route
+doesn't claim. Nest it under a section for a **subtree-scoped** not-found (it
+shows inside that tab, stacked on the section root, so *back* returns there);
+put it at the **top level** for a global one. The most specific catch-all wins,
+a concrete route always beats a wildcard, and if a section defines none the URL
+falls through to the nearest catch-all above it (or to `onUnknown`, if you'd
+rather handle it outside the tree):
+
+```dart
+raku(
+  initial: const Feed(),
+  routes: [
+    tabs(shell: ..., branches: [
+      [route('/feed', (_) => const Feed(), (_) => const FeedScreen(), children: [
+        route('notes/:id', (p) => Note(p('id')), (n) => NoteScreen(id: n.id)),
+        // /feed/anything-else → the feed section's own 404, inside the tab.
+        route('*', (p) => FeedMissing(p.rest), (n) => MissingScreen(n.path)),
+      ])],
+      [route('/settings', (_) => const Settings(), (_) => const SettingsScreen())],
+    ]),
+    // Anything matched by no section (e.g. /nope, /settings/x) → global 404.
+    route('*', (p) => NotFound(p.rest), (n) => NotFoundScreen(n.path)),
+  ],
+);
+```
+
+The unmatched tail arrives typed via `p.rest` (e.g. `garbage/x`), and a
+catch-all route round-trips like any other — so the 404's URL is preserved and
+shareable, not rewritten.
 
 ## Transitions
 
@@ -235,6 +279,52 @@ Omit it for the default hash strategy. Either way the same route tree resolves;
 for clean paths your host must serve `index.html` for unknown routes (SPA
 fallback), the usual single-page-app deploy step.
 
+### Route → URL (links & sharing)
+
+`raku(...)` returns a `RakuRouter` — a `RouterConfig` that also exposes the
+route tree's *reverse* direction. Turn a typed route into its URL for a share
+link, a deep link, or an `<a href>`:
+
+```dart
+final router = raku(initial: const Home(), routes: [...]);
+
+router.hrefOf(const Note('42')); // '/feed/notes/42'
+router.uriOf(const Search('shoes')); // Uri: /search?q=shoes
+```
+
+It's built by the same tree that parses URLs, so it always stays in sync — no
+second, hand-written "route to path" function to drift. (This is the app-internal
+location; under the default hash strategy an actual anchor's `href` is that value
+after a `#`.)
+
+### Browser tab titles
+
+Give a node a `title:` to set the browser tab (and Android task-switcher) label
+while that route is the active leaf. Derive it from the route so detail pages
+read well:
+
+```dart
+route('notes/:id', (p) => Note(p('id')), (n) => NoteScreen(id: n.id),
+    title: (n) => 'Note ${n.id}');
+```
+
+Opt-in and per-route: routes without a `title:` leave it untouched, and if you
+declare none the platform is never called.
+
+### Transient URL state (no history spam)
+
+`context.replaceSilently(route)` updates the address bar **in place** — no new
+history entry, so back/forward skips it. Use it for URL state that should be
+shareable and restorable but shouldn't clutter history: a search query, an active
+filter, a within-page selection.
+
+```dart
+onChanged: (q) => context.replaceSilently(Search(q)), // one history entry, not one per keystroke
+```
+
+It wraps Flutter's `Router.neglect`; outside a deep-linked app (no Router, no URL)
+it degrades to a plain `replace`.
+
 ## State restoration
 
 Because `raku(...)` is a standard `RouterConfig`, the **navigation location
@@ -268,6 +358,141 @@ offset), use Flutter's `RestorationMixin` in that screen and give its page a
 - No animation library; bring your own `RouteTransitionsBuilder` for fancy ones.
 
 These are deliberate omissions for a small core, not oversights.
+
+## Navigation results
+
+Raku does **not** thread a result back through an awaited `push`/`pop` (the
+`showDialog`-style `Navigator.push<T>() → await`). Navigation here is
+declarative — the stack is data — so a "picked value" flows back the way any
+other state does, not through the navigation call. Two idioms:
+
+```dart
+// 1. A callback carried on the route (immutable, so keep it out of `props`).
+class PickColor extends AppRoute {
+  const PickColor(this.onPicked);
+  final ValueChanged<Color> onPicked;
+  @override
+  List<Object?> get props => const []; // identity, not the callback
+}
+// Opener:  context.push(PickColor((color) => setState(() => picked = color)));
+// Picker:  route.onPicked(color); context.pop();  // the opener reacts
+
+// 2. Shared state the opener already listens to (a ValueNotifier, signal, …).
+context.push(const PickColor2()); // picker writes selection.value; opener rebuilds
+```
+
+For a plain dialog that genuinely wants an awaited value, use
+`showDialog<T>()` — it composes fine (see below); Raku owns *page* navigation,
+not every ephemeral overlay.
+
+## Auth: a login guard
+
+Model "must be signed in" as a `RouteRedirect`. Because `redirect()` returns a
+`FutureOr`, it can await your auth state; a deep link into a protected route
+resolves the redirect *before* the screen is shown, exactly like an in-app push:
+
+```dart
+class Account extends AppRoute with RouteRedirect {
+  const Account();
+  @override
+  FutureOr<RakuRoute?> redirect() async =>
+      await auth.isSignedIn() ? null : const Login(from: Account());
+}
+
+class Login extends AppRoute {
+  const Login({this.from});
+  final RakuRoute? from; // where to return after a successful sign-in
+  @override
+  List<Object?> get props => [from];
+}
+// On success: context.replace(from ?? const Home());
+```
+
+The loop protection is built in — a redirect chain that would spin is stopped
+for you.
+
+## Dialogs & bottom sheets
+
+`showDialog` / `showModalBottomSheet` are imperative `Navigator.push`es, and they
+live happily alongside a Raku stack — the view syncs itself. When the framework
+removes a page you pushed imperatively (a barrier tap, an imperative `pop`), Raku
+hears it via `Navigator.onDidRemovePage` and keeps its stack consistent, so a
+later system-back still pops the *page* you expect.
+
+```dart
+final choice = await showModalBottomSheet<String>(context: context, builder: ...);
+if (choice != null) context.push(NoteDetail(choice)); // page nav stays declarative
+```
+
+Rule of thumb: **pages** (addressable, deep-linkable, in the back stack) are
+routes; **overlays** (dialogs, sheets, menus, snackbars) stay imperative.
+
+## Testing your navigation
+
+The reactive core is a plain object — assert on it with no widgets at all:
+
+```dart
+final stack = RouteStack(const Home());
+stack.push(const NoteDetail('42'));
+expect(stack.current, const NoteDetail('42'));
+expect(stack.value, [const Home(), const NoteDetail('42')]);
+```
+
+For the deep-link router, drive the `RouterConfig` the way the platform does —
+parse a URL, feed it to the delegate, and pump:
+
+```dart
+final router = raku(initial: const Home(), routes: [...]);
+await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+
+final loc = await router.routeInformationParser!
+    .parseRouteInformation(RouteInformation(uri: Uri.parse('/feed/notes/42')));
+await router.routerDelegate.setNewRoutePath(loc);
+await tester.pumpAndSettle();
+expect(find.text('Note 42'), findsOneWidget);
+expect(router.routerDelegate.currentConfiguration, const Note('42'));
+```
+
+`popRoute()` exercises the system back button; `router.hrefOf(route)` checks the
+reverse (route → URL) direction. See this package's own `test/` for guard,
+redirect, tabs, restoration, and 404 examples.
+
+## Migrating from go_router
+
+The concepts line up almost one-to-one; the difference is that destinations are
+typed objects, not string paths.
+
+| go_router | raku_router |
+| --- | --- |
+| `GoRoute(path, builder)` | `route(path, parse, screen)` |
+| `GoRoute(routes: [...])` (nested) | `route(..., children: [...])` |
+| `StatefulShellRoute` / `ShellRoute` | `tabs(shell:, branches:)` |
+| `redirect:` | `with RouteRedirect` (per route, loop-protected) |
+| `errorBuilder` / `onException` | catch-all `route('*', …)` or `onUnknown:` |
+| `context.go(uri)` / `context.push(uri)` | `context.push(RouteObject)` (typed) |
+| `context.replace(uri)` | `context.replace(route)` / `replaceSilently` |
+| `state.pathParameters['id']` | typed constructor via `parse` (`p('id')`) |
+| `GoRouterState.uri` | `router.uriOf(route)` (reverse) |
+| `observers:` | `observers:` (a factory — see above) |
+| `.gr.dart` / `build_runner` | nothing — plain `sealed` classes |
+
+The mechanical part of a migration is turning each `GoRoute`'s string
+destination into a `sealed` route class and moving its `state.pathParameters`
+reads into the constructor.
+
+## Versioning & deprecation policy
+
+Raku follows semantic versioning, with one pre-1.0 clarification:
+
+- **`0.x`** — the API is settling. New capability lands additively (a `0.2.0`,
+  `0.3.0`, …). A breaking change, if one proves necessary, ships in a **minor**
+  bump with a `CHANGELOG` migration note.
+- **`1.0.0`** — a *stability* release, not a feature one: the surface reviewed
+  here becomes a compatibility promise.
+- **After `1.0`** — breaking changes only on a **major** bump. Anything being
+  removed is first marked `@Deprecated` with a pointer to its replacement and
+  kept for at least one minor release, so you always have a non-breaking upgrade
+  path.
 
 ## Why not just use go_router / auto_route?
 

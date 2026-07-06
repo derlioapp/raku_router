@@ -3,7 +3,7 @@ description: >-
   A tiny, code-generation-free, UI-agnostic router for Flutter: type-safe sealed
   routes, declarative deep linking, and built-in nested tabs with per-branch
   back stacks.
-version: 0.1.0
+version: 0.2.0
 
 homepage: https://derlioapp.github.io/raku_router/
 repository: https://github.com/derlioapp/raku_router

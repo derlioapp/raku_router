@@ -1,7 +1,7 @@
 name: raku_router_example
-description: Example app demonstrating raku_router (tabs, guard, redirect, deep link).
+description: Example app demonstrating raku_router (tabs, guard, deep link, full-page route).
 publish_to: 'none'
-version: 0.1.0
+version: 0.2.0
 
 environment:
   sdk: '>=3.6.0 <4.0.0'

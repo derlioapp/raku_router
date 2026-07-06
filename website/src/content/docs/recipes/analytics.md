@@ -34,5 +34,7 @@ raku(
   route for a custom label.
 - The initial route isn't reported (you already have `initial` — log it once at
   startup if you need it).
-- Need the raw framework `Route` objects (durations, modal barriers)? Pass a
-  `NavigatorObserver` to `RouteStackView.observers` instead.
+- Need the raw framework `Route` objects (durations, modal barriers) or a
+  drop-in like `FirebaseAnalyticsObserver`? Pass `observers:` to `raku(...)` — a
+  factory that attaches fresh `NavigatorObserver`s to the root and each tab
+  branch. See [Observability](/raku_router/guides/observability/).
