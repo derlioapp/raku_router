@@ -17,8 +17,9 @@ route('/sheet', (_) => const Sheet(), (_) => const SheetScreen(),
     transition: RakuTransitions.slideIn(from: SlideFrom.bottom));
 ```
 
-The lower-level `RouteStackView` / `BranchedStackView` default to a neutral
-`RakuTransitions.fade`.
+It's the one default everywhere — `RouteStackView`, `BranchedStackView`, and a
+bare `RakuPage` use `slideIn` too, so switching from a single stack to
+`raku(...)` doesn't change how pages move.
 
 ## What ships
 

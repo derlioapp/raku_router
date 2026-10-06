@@ -68,6 +68,12 @@ raku(
 - A section with **no** catch-all falls through to the nearest one above it — an
   unknown `/settings/…` here lands on the global `NotFound` (full-page above the
   shell).
+- **Malformed links are 404s too.** If a route's `parse` throws on a bad value
+  (`/feed/notes/abc` with `p.asInt('id')`), or the URL isn't valid
+  percent-encoding, that route simply doesn't match and the catch-all takes it —
+  a bad link never crashes the app.
+- A **Home** button on the 404 screen: `context.go(const Feed())` rebuilds the
+  location from scratch, so it works even when the 404 was opened cold.
 
 **`onUnknown:` vs a catch-all**
 

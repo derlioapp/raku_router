@@ -5,9 +5,13 @@
 /// single source of truth that lets a route map to and from a URL with no
 /// hand-written parsing or string building.
 ///
-/// Segments are matched exactly (same count, literals equal); a `:name` segment
-/// captures one path segment. Percent-encoding is handled on both sides. The
-/// query string is ignored for matching.
+/// Segments are matched exactly (same count, literals equal, **case-sensitive**);
+/// a `:name` segment captures one path segment. Empty segments are ignored, so
+/// a trailing slash or a doubled `//` doesn't change the match. Percent-encoding
+/// is handled on both sides; a `:param` segment that isn't valid
+/// percent-encoding simply doesn't match (it never throws — URLs are untrusted
+/// input), while a catch-all keeps such a tail raw. The query string
+/// and `#fragment` are ignored for matching.
 ///
 /// A trailing `*` is a **catch-all**: it must be the last segment and captures
 /// the remaining path (zero or more segments, joined by `/`) under the reserved
@@ -50,30 +54,43 @@ class PathPattern {
     if (isCatchAll) {
       final fixed = _segments.length - 1;
       if (parts.length < fixed) return null;
-      final params = <String, String>{};
-      for (var i = 0; i < fixed; i++) {
-        final segment = _segments[i];
-        if (segment.isParam) {
-          params[segment.text] = Uri.decodeComponent(parts[i]);
-        } else if (segment.text != parts[i]) {
-          return null;
-        }
-      }
-      params[catchAllKey] =
-          parts.sublist(fixed).map(Uri.decodeComponent).join('/');
-      return params;
+      final params = _matchFixed(parts, fixed);
+      if (params == null) return null;
+      // A catch-all is the 404 net, so it also catches a malformed tail (kept
+      // raw) rather than letting it slip past to onUnknown.
+      final rest = <String>[
+        for (final part in parts.skip(fixed)) _decode(part) ?? part,
+      ];
+      return params..[catchAllKey] = rest.join('/');
     }
     if (parts.length != _segments.length) return null;
+    return _matchFixed(parts, _segments.length);
+  }
+
+  // Matches the first [count] segments against [parts], capturing params.
+  Map<String, String>? _matchFixed(List<String> parts, int count) {
     final params = <String, String>{};
-    for (var i = 0; i < _segments.length; i++) {
+    for (var i = 0; i < count; i++) {
       final segment = _segments[i];
       if (segment.isParam) {
-        params[segment.text] = Uri.decodeComponent(parts[i]);
+        final decoded = _decode(parts[i]);
+        if (decoded == null) return null;
+        params[segment.text] = decoded;
       } else if (segment.text != parts[i]) {
         return null;
       }
     }
     return params;
+  }
+
+  // Percent-decodes one segment, or null when it isn't valid encoding (e.g. a
+  // truncated `%E0%A4`) — a malformed URL is a non-match, never a crash.
+  static String? _decode(String segment) {
+    try {
+      return Uri.decodeComponent(segment);
+    } on Object {
+      return null;
+    }
   }
 
   /// Builds a concrete path, substituting [params] for each `:param` and the

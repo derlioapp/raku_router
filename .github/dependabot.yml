@@ -1,0 +1,16 @@
+# Keeps the SHA-pinned GitHub Actions and the dev dependencies current. Updates
+# arrive as PRs, so CI (analyze, tests, the Flutter 3.27 floor, pana) gates each.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: monthly

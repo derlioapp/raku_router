@@ -18,8 +18,8 @@ class LiveLocation {
   LiveLocation(
     this.tree,
     List<RouteMatch> matches, {
-    this.transitionsBuilder = RakuTransitions.fade,
-    this.transitionDuration = const Duration(milliseconds: 250),
+    this.transitionsBuilder,
+    this.transitionDuration = RakuTransitions.slideInDuration,
     this.observers,
   }) {
     root = _buildStack(matches);
@@ -29,7 +29,7 @@ class LiveLocation {
   final RouteTree tree;
 
   /// Default transition for screens.
-  final RouteTransitionsBuilder transitionsBuilder;
+  final RouteTransitionsBuilder? transitionsBuilder;
 
   /// Default transition duration.
   final Duration transitionDuration;
@@ -89,13 +89,17 @@ class LiveLocation {
   RakuRoute get activeLeaf => activeLeafStack.current;
 
   /// The stack the deepest active screen lives on (a new push lands here).
-  RouteStack get activeLeafStack {
-    var stack = root;
-    while (stack.current is _ShellSentinel) {
-      stack =
-          _shells[(stack.current as _ShellSentinel).id]!.controller.activeStack;
+  RouteStack get activeLeafStack => activeStacks.last;
+
+  /// The visible chain of stacks, outermost first: the root, then the active
+  /// branch of each shell on top, down to [activeLeafStack].
+  List<RouteStack> get activeStacks {
+    final chain = <RouteStack>[root];
+    while (true) {
+      final top = chain.last.current;
+      if (top is! _ShellSentinel) return chain;
+      chain.add(_shells[top.id]!.controller.activeStack);
     }
-    return stack;
   }
 
   /// Subscribes [listener] to every stack and controller, so any navigation or
@@ -127,15 +131,69 @@ class LiveLocation {
   /// This is what makes a platform URL change (browser back/forward, a deep
   /// link) preserve state instead of rebuilding the whole tree: the other tabs
   /// keep their in-app history, and unchanged screens keep their element state.
-  void reconcile(List<RouteMatch> matches) => _reconcileStack(root, matches);
+  void reconcile(List<RouteMatch> matches) => _walk(
+        root,
+        matches,
+        onStack: reconcileStack,
+        onTab: (controller, index) => controller.index = index,
+      );
 
-  void _reconcileStack(RouteStack stack, List<RouteMatch> matches) {
+  /// The guarded page that reconciling to [matches] would remove while its
+  /// [RouteGuard.canPop] is `false` — with the stack it lives on — or null when
+  /// the change is allowed. Lets a platform URL change (browser back/forward)
+  /// honour a guard the same way the back button does.
+  ({RouteGuard guard, RouteStack stack})? blockingGuard(
+    List<RouteMatch> matches,
+  ) {
+    ({RouteGuard guard, RouteStack stack})? blocked;
+    _walk(
+      root,
+      matches,
+      onStack: (stack, routes) {
+        final entries = stack.entries;
+        // Entries past the longest unchanged prefix are the ones replaced.
+        var kept = 0;
+        while (kept < entries.length &&
+            kept < routes.length &&
+            entries[kept].route == routes[kept]) {
+          kept++;
+        }
+        for (final entry in entries.skip(kept)) {
+          final route = entry.route;
+          if (route is RouteGuard && !route.canPop) {
+            blocked ??= (guard: route, stack: stack);
+          }
+        }
+      },
+      onTab: (_, __) {},
+    );
+    return blocked;
+  }
+
+  // Walks [matches] against the live tree, reporting each stack's new routes
+  // ([onStack]) and each shell's new active branch ([onTab]) — in the order a
+  // reconcile applies them — without itself changing anything.
+  void _walk(
+    RouteStack stack,
+    List<RouteMatch> matches, {
+    required void Function(RouteStack stack, List<RakuRoute> routes) onStack,
+    required void Function(BranchedRouteStack controller, int index) onTab,
+  }) {
     // A shell that is the sole match is the URL's actual target: descend into it
     // and switch to the matched branch.
     if (matches.length == 1 && matches.first is TabsMatch) {
       final sentinel = stack.entries.first.route as _ShellSentinel;
-      _reconcileTabs(_shells[sentinel.id]!, matches.first as TabsMatch);
-      stack.reconcileRoutes(<RakuRoute>[sentinel]);
+      final match = matches.first as TabsMatch;
+      final controller = _shells[sentinel.id]!.controller;
+      // Only the matched branch follows the URL; the rest keep their stacks.
+      _walk(
+        controller.branches[match.activeBranch].stack,
+        match.branches[match.activeBranch],
+        onStack: onStack,
+        onTab: onTab,
+      );
+      onTab(controller, match.activeBranch);
+      onStack(stack, <RakuRoute>[sentinel]);
       return;
     }
     // Otherwise the matches are screens — optionally above a shell that merely
@@ -148,17 +206,7 @@ class LiveLocation {
           TabsMatch() => stack.entries.first.route,
         },
     ];
-    stack.reconcileRoutes(routes);
-  }
-
-  void _reconcileTabs(_LiveTabs live, TabsMatch match) {
-    final controller = live.controller;
-    // Only the matched branch follows the URL; the rest keep their live stacks.
-    _reconcileStack(
-      controller.branches[match.activeBranch].stack,
-      match.branches[match.activeBranch],
-    );
-    controller.index = match.activeBranch;
+    onStack(stack, routes);
   }
 
   /// Renders the live tree.
@@ -223,7 +271,7 @@ class _LiveTabs {
 
 /// A private marker route standing in for a tabs shell inside a [RouteStack].
 /// Identity is its [id] (read directly in `_screenFor`); it never needs value
-/// equality (page keys come from the stack entry, not the route).
+/// equality — a reconcile always hands a stack back its own sentinel instance.
 class _ShellSentinel extends RakuRoute {
   const _ShellSentinel(this.id);
   final int id;

@@ -88,3 +88,28 @@ shareable, not rewritten.
 catch-all) — map it to a fallback route outside the tree. A top-level `route('*',
 …)` is usually the better choice, because it stays a normal, addressable route;
 reach for `onUnknown:` when you'd rather handle the miss imperatively.
+
+A URL that matches nothing — or that a route's `parse` rejects by throwing, like
+`p.asInt('id')` on `/notes/abc` — ends up here (or at a catch-all) instead of
+crashing the app.
+
+## Navigating from anywhere
+
+`raku(...)` returns a `RakuRouter`; keep it, and it's your navigation handle where
+there's no `BuildContext`:
+
+```dart
+final router = raku(initial: const Home(), routes: [...]);
+
+router.go(const Note('42'));   // rebuild the location like a deep link
+router.push(const Note('42')); // push at the right level (tab or full-page)
+router.current;                // ValueListenable<RakuRoute> — the active leaf
+router.routeOf(uri);           // URL → typed route, or null (never throws)
+router.hrefOf(const Note('42')); // route → URL
+```
+
+`go` vs `push`: `push` adds on top of where the user is; `go` replaces the whole
+location with what the route's URL describes — its ancestors as the back stack,
+the right tab selected — after following redirects. Reach for `go` after
+sign-in/sign-out or for a notification tap; from a widget, `context.go(route)`
+does the same.

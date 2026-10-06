@@ -19,6 +19,10 @@ class Dashboard extends AppRoute with RouteRedirect {
 A deep link to `/dashboard` while signed out lands on `Login`; once signed in, it
 shows the dashboard. No manual guard wiring at the call site.
 
+The redirect also covers everything **nested under** `Dashboard`: a link to
+`/dashboard/reports/7` is redirected too, because every route on a deep link's
+path is checked.
+
 **Redirect after login**
 
 Keep the intended destination and push it once auth succeeds:
@@ -31,9 +35,30 @@ class Login extends AppRoute {
   List<Object?> get props => [then];
 }
 
-// in LoginScreen, on success:
-context.replace(widget.route.then ?? const Dashboard());
+// in LoginScreen, on success — `go` rebuilds the location (back stack, tab):
+context.go(widget.route.then ?? const Dashboard());
 ```
+
+Carry the destination as a **typed route**, not a `?next=` URL string: a route
+object can only point inside your app, so there's no open-redirect to guard
+against.
+
+**Sign-out**
+
+Redirects run when a route is *entered*, so on sign-out navigate away
+explicitly. Keep the `RakuRouter` that `raku(...)` returns and listen to your
+auth state — no `BuildContext` needed:
+
+```dart
+final router = raku(initial: const Home(), routes: [...]);
+
+auth.addListener(() {
+  if (!auth.isSignedIn) router.go(const Login());
+});
+```
+
+`go` isn't vetoed by `RouteGuard`s — signing out is an app decision, not a back
+gesture.
 
 **Notes**
 

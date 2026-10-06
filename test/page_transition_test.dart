@@ -83,12 +83,35 @@ void main() {
     expect(find.text('plain'), findsOneWidget);
 
     // A screen calling Navigator.pop() directly must keep the RouteStack in
-    // sync — RouteStackView wires Navigator.onDidRemovePage → handlePageRemoved.
+    // sync — RouteStackView wires Navigator.onDidRemovePage → removeStackPage.
     tester.state<NavigatorState>(find.byType(Navigator).last).pop();
     await tester.pumpAndSettle();
 
     expect(stack.length, 1);
     expect(stack.current, const Home());
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('one default everywhere: RouteStackView / RakuPage use slideIn',
+      (tester) async {
+    bool isSlideIn(Widget w) => w.runtimeType.toString() == '_PremiumSlide';
+    const page = RakuPage<Object?>(child: SizedBox());
+    expect(page.transitionsBuilder, isNull, reason: 'null = the default');
+    expect(page.transitionDuration, RakuTransitions.slideInDuration);
+    expect(
+      page.reverseTransitionDuration,
+      RakuTransitions.slideInReverseDuration,
+    );
+
+    final stack = RouteStack(const Home());
+    addTearDown(stack.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: RouteStackView(stack: stack, builder: buildScreen)),
+    );
+    stack.push(const Note('1'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byWidgetPredicate(isSlideIn), findsWidgets);
+    await tester.pumpAndSettle();
   });
 }

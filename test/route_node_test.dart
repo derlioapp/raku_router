@@ -4,6 +4,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:raku_router/raku_router.dart';
+// The matching machinery is package-internal (not exported); test it directly.
+import 'package:raku_router/src/router/route_node.dart';
 
 import 'fixtures.dart';
 

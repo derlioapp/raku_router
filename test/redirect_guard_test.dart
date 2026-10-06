@@ -1,5 +1,5 @@
 // TST-03 — redirect & guard depth: sync/async redirects, chains, the
-// sameDestination short-circuit, loop detection (assert-aware), guard veto.
+// same-destination short-circuit, loop detection (assert-aware), guard veto.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:raku_router/raku_router.dart';
 
@@ -25,7 +25,7 @@ void main() {
     expect(s.current, const Home());
   });
 
-  test('a self-redirect stays put (sameDestination short-circuit)', () async {
+  test('a self-redirect stays put (same-destination short-circuit)', () async {
     final s = RouteStack(const Home());
     await s.push(const SelfRedirect());
     expect(s.current, const SelfRedirect());

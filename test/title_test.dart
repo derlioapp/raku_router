@@ -103,4 +103,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(labels, isEmpty);
   });
+
+  testWidgets('raku(title:) is the fallback, so a title never goes stale',
+      (tester) async {
+    final labels = _spyOnTitles(tester);
+    final config = raku(
+      initial: const Feed(),
+      title: (route) => 'App',
+      routes: [
+        route(
+          '/feed',
+          (_) => const Feed(),
+          (_) => const Text('feed'),
+          children: [
+            route(
+              'notes/:id',
+              (p) => Note(p('id')),
+              (n) => Text('note-${n.id}'),
+              title: (n) => 'Note ${n.id}',
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(() => (config.routerDelegate as ChangeNotifier).dispose());
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: config));
+    await tester.pumpAndSettle();
+    expect(labels, ['App'], reason: 'untitled route → the fallback');
+
+    await _go(tester, config, '/feed/notes/7');
+    expect(labels, ['App', 'Note 7'], reason: 'a route title wins');
+
+    // Back to the untitled Feed: the label returns to the fallback instead of
+    // keeping the stale "Note 7".
+    await config.routerDelegate.popRoute();
+    await tester.pumpAndSettle();
+    expect(labels, ['App', 'Note 7', 'App']);
+  });
 }

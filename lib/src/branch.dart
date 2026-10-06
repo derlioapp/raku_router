@@ -10,7 +10,7 @@ import 'stack_view.dart';
 /// Each branch owns an independent [RouteStack], so switching branches
 /// preserves each one's back history (the "persistent tab stack" behaviour you
 /// get from `StatefulShellRoute`, but built in).
-class RouteBranch {
+final class RouteBranch {
   /// Creates a branch whose stack starts at [initial].
   RouteBranch({required this.id, required RakuRoute initial})
       : stack = RouteStack(initial);
@@ -109,7 +109,7 @@ class BranchedRouteStack extends ChangeNotifier {
 /// Switching branches is an **instant** [IndexedStack] swap, not an animated
 /// transition — deliberately, so each branch's `Navigator` (and its stack,
 /// scroll, and state) is preserved. `transitionsBuilder` animates pushes
-/// *within* a branch; to animate the tab switch itself, wrap the active [child]
+/// *within* a branch; to animate the tab switch itself, wrap the active `child`
 /// in your shell builder with an `AnimatedSwitcher`.
 class BranchedStackView extends StatefulWidget {
   /// Creates a view that renders [controller]'s active branch.
@@ -119,8 +119,8 @@ class BranchedStackView extends StatefulWidget {
     required this.builder,
     this.pageBuilder,
     this.observers,
-    this.transitionsBuilder = RakuTransitions.fade,
-    this.transitionDuration = const Duration(milliseconds: 250),
+    this.transitionsBuilder,
+    this.transitionDuration = RakuTransitions.slideInDuration,
     this.resolveTransition,
     this.handleSystemBack = true,
   });
@@ -142,8 +142,9 @@ class BranchedStackView extends StatefulWidget {
   /// fresh `FirebaseAnalyticsObserver`).
   final List<NavigatorObserver> Function()? observers;
 
-  /// Default transition for branches that don't use `RouteTransition`.
-  final RouteTransitionsBuilder transitionsBuilder;
+  /// Default transition for branches that don't use `RouteTransition`; null
+  /// uses the premium [RakuTransitions.slideIn].
+  final RouteTransitionsBuilder? transitionsBuilder;
 
   /// Default forward/reverse transition duration for each branch.
   final Duration transitionDuration;

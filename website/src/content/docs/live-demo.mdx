@@ -7,6 +7,15 @@ The example app below runs as a real Flutter web build. Navigate the tabs, open 
 note, push a full-page photo — and watch the **address bar change** and browser
 **back/forward** work, with each tab keeping its own history.
 
+Things to try:
+
+- Open a note, then a nested note, and use the browser's **back** button — you
+  return through the tab's history, and switching tabs keeps each one's stack.
+- In **Settings → Edit profile**, turn on *Unsaved changes* and press back —
+  including the browser's back button: the guard blocks it.
+- Type an unknown path into the address bar: the typed 404 shows it, and
+  **Go to the feed** rebuilds the location with `context.go`.
+
 <div style="border:1px solid var(--sl-color-gray-5); border-radius:12px; overflow:hidden; aspect-ratio: 1 / 1; max-width: 420px; margin-inline:auto;">
 	<iframe
 		src="/raku_router/demo/index.html"

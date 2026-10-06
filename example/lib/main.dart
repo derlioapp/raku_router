@@ -206,6 +206,23 @@ class NoteScreen extends StatelessWidget {
               onPressed: () => context.push(Note('$id-child')),
               child: const Text('Push a nested note'),
             ),
+            // Overlays stay imperative. System back closes the dialog first;
+            // only the next back pops this note.
+            OutlinedButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  content: Text('Note $id'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              ),
+              child: const Text('Show a dialog'),
+            ),
             TextButton(onPressed: context.pop, child: const Text('Back')),
           ],
         ),
@@ -245,7 +262,10 @@ class EditProfileScreen extends StatelessWidget {
               SwitchListTile(
                 title: const Text('Unsaved changes'),
                 subtitle: Text(
-                  dirty ? 'Back is BLOCKED.' : 'Toggle on to block leaving.',
+                  dirty
+                      ? 'Back is BLOCKED — gesture, button, and the '
+                          "browser's back button."
+                      : 'Toggle on to block leaving.',
                 ),
                 value: dirty,
                 onChanged: (v) => EditProfile.dirty.value = v,
@@ -303,6 +323,12 @@ class NotFoundScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text("Couldn't find /$attempted"),
             const SizedBox(height: 12),
+            // `go` rebuilds the whole location like a deep link — it works even
+            // when this page was opened cold from a bad URL.
+            FilledButton(
+              onPressed: () => context.go(const Feed()),
+              child: const Text('Go to the feed'),
+            ),
             TextButton(onPressed: context.pop, child: const Text('Go back')),
           ],
         ),

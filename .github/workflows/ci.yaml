@@ -1,5 +1,9 @@
 name: ci
 
+# Least privilege: CI only reads the repo.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -11,8 +15,8 @@ jobs:
     name: format · guard · analyze · test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
       - run: flutter pub get
@@ -29,12 +33,13 @@ jobs:
     name: pana 160/160
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+      # Pinned: a new pana can change scoring rules; bump it deliberately.
       - name: Install pana
-        run: dart pub global activate pana
+        run: dart pub global activate pana 0.23.19
       - name: pana — require the full pub score
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -48,10 +53,10 @@ jobs:
     name: floor (Flutter 3.27)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # The declared SDK floor — proves raku_router compiles on Flutter 3.27 / Dart
       # 3.6, the lowest it claims to support.
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: 3.27.0
           channel: stable

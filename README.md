@@ -19,9 +19,10 @@ real need is modest, and a small reactive core beats a big framework.
   `flutter`. You inject the pages/transitions, so it drops into Material,
   Cupertino, or a custom design system equally.
 
-> Pre-`1.0`: the **public API surface is reviewed and locked** (naming, route
-> equality, navigation results, the error/assertion contract); further changes
-> are additive features, not churn. See the [CHANGELOG](CHANGELOG.md).
+> Pre-`1.0`: the public API has had its **1.0 freeze review** — the surface is
+> trimmed to what apps use, value types are `final`, and URL handling is
+> hardened. What remains before `1.0` is field validation, not churn. See the
+> [CHANGELOG](CHANGELOG.md).
 
 ## Mental model
 
@@ -116,6 +117,11 @@ class LegacyNote extends AppRoute with RouteRedirect {
 Redirect chains are followed and **loop-protected** by the package — you don't
 have to hand-write the "am I already going there?" check.
 
+A guard vetoes **every** way of leaving the screen — the back gesture, the
+system back button, `context.pop()`, and on the web the browser's back/forward
+buttons (the address bar is put back). An explicit `go` (below) is an app
+decision and isn't vetoed.
+
 ## Deep linking — one declarative route tree
 
 Declare each screen's URL **once** in a tree of `route(...)` (and `tabs(...)`)
@@ -155,6 +161,33 @@ route('/orgs/:org/members/:id',
 
 route('/search', (p) => Search(p.query('q') ?? ''), (s) => SearchScreen(s),
     encode: (s) => RoutePath(const {}, query: {'q': s.term}));
+```
+
+### Navigating from anywhere
+
+`raku(...)` returns a `RakuRouter`. Besides being the `routerConfig`, it's your
+navigation handle for code that has no `BuildContext` — a push-notification
+handler, an auth listener, a service:
+
+```dart
+final router = raku(initial: const Home(), routes: [...]);
+
+router.go(const Dashboard());   // rebuild the location, like a deep link
+router.push(const Note('42'));  // push at the right level (tab or full-page)
+router.current;                 // ValueListenable<RakuRoute> — the active leaf
+router.routeOf(uri);            // URL → typed route, or null (never throws)
+```
+
+`go` is the "reset" navigation: the whole location is rebuilt from the route's
+URL (its ancestors become the back stack, the right tab is selected), after
+following redirects. Use it after sign-in / sign-out, or to open a notification
+with a sensible back stack. From a widget, `context.go(route)` does the same.
+
+```dart
+onNotificationTap((String payload) {
+  final route = router.routeOf(Uri.tryParse(payload) ?? Uri());
+  if (route != null) router.go(route); // unknown links are simply ignored
+});
 ```
 
 For analytics or logging, pass `onNavigation:` — it reports the active route as a
@@ -241,10 +274,10 @@ shareable, not rewritten.
 
 ## Transitions
 
-`raku_router` defaults to the premium `RakuTransitions.slideIn` (set
-`transition:` to change it globally, `RakuTransitions.none` to disable, or
-`route(..., transition: ...)` per node). The lower-level `RouteStackView` /
-`BranchedStackView` default to a neutral `RakuTransitions.fade`.
+Every page defaults to the premium `RakuTransitions.slideIn` — `raku(...)`,
+`RouteStackView`, `BranchedStackView`, and `RakuPage` alike. Set `transition:`
+to change it globally, `RakuTransitions.none` to disable, or
+`route(..., transition: ...)` per node.
 
 ```dart
 route('/sheet', (_) => const Sheet(), (_) => const SheetScreen(),
@@ -308,8 +341,30 @@ route('notes/:id', (p) => Note(p('id')), (n) => NoteScreen(id: n.id),
     title: (n) => 'Note ${n.id}');
 ```
 
-Opt-in and per-route: routes without a `title:` leave it untouched, and if you
-declare none the platform is never called.
+Give `raku(title: ...)` a fallback for the routes that declare none — otherwise
+leaving a titled route for an untitled one keeps the old label:
+
+```dart
+raku(initial: const Home(), routes: [...], title: (_) => 'My App');
+```
+
+Opt-in: if no route declares a title and there's no fallback, the platform is
+never called.
+
+### URL matching rules
+
+- Matching is **case-sensitive** (`/Notes/1` doesn't match `notes/:id`).
+- A trailing slash and doubled slashes are ignored (`/notes/1/` = `/notes/1`).
+- The `#fragment` is ignored and not round-tripped.
+- A repeated query key keeps its **last** value (`?q=a&q=b` → `b`).
+- Params are percent-decoded on the way in and re-encoded on the way out.
+
+**URLs are untrusted input** — anyone can send your app a deep link. A URL
+that matches nothing, isn't valid percent-encoding, or makes your `parse` throw
+(`p.asInt('id')` on `/notes/abc`) never crashes the app: that route just
+doesn't match, so the URL falls through to a catch-all `route('*', …)` or to
+`onUnknown`. Still treat the typed values as untrusted in your screens, as you
+would form input.
 
 ### Transient URL state (no history spam)
 
@@ -405,11 +460,26 @@ class Login extends AppRoute {
   @override
   List<Object?> get props => [from];
 }
-// On success: context.replace(from ?? const Home());
+// On success: context.go(from ?? const Home());
 ```
 
 The loop protection is built in — a redirect chain that would spin is stopped
 for you.
+
+**Protect a whole section with one redirect.** A deep link rebuilds the entire
+ancestor chain, and every redirect along it applies, so guarding the section
+root guards everything below it: with `Admin` redirecting signed-out users, a
+link to `/admin/users/1` lands on `Login` too.
+
+**Sign-out** — redirects run when a route is *entered*, so react to the auth
+change by navigating:
+
+```dart
+auth.addListener(() {
+  if (!auth.isSignedIn) router.go(const Login());
+});
+// After a successful sign-in: context.go(from ?? const Home());
+```
 
 ## Dialogs & bottom sheets
 
@@ -423,6 +493,9 @@ later system-back still pops the *page* you expect.
 final choice = await showModalBottomSheet<String>(context: context, builder: ...);
 if (choice != null) context.push(NoteDetail(choice)); // page nav stays declarative
 ```
+
+System back closes an open dialog or sheet **first** — whether it sits on the
+root navigator or on a tab's — and only the next back pops the page under it.
 
 Rule of thumb: **pages** (addressable, deep-linkable, in the back stack) are
 routes; **overlays** (dialogs, sheets, menus, snackbars) stay imperative.
@@ -467,12 +540,15 @@ typed objects, not string paths.
 | `GoRoute(path, builder)` | `route(path, parse, screen)` |
 | `GoRoute(routes: [...])` (nested) | `route(..., children: [...])` |
 | `StatefulShellRoute` / `ShellRoute` | `tabs(shell:, branches:)` |
-| `redirect:` | `with RouteRedirect` (per route, loop-protected) |
+| `redirect:` | `with RouteRedirect` (per route — covers its subtree — loop-protected) |
+| `refreshListenable:` | listen to your auth state, then `router.go(...)` |
 | `errorBuilder` / `onException` | catch-all `route('*', …)` or `onUnknown:` |
-| `context.go(uri)` / `context.push(uri)` | `context.push(RouteObject)` (typed) |
+| `context.go(uri)` | `context.go(route)` / `router.go(route)` (typed) |
+| `context.push(uri)` | `context.push(route)` / `router.push(route)` |
 | `context.replace(uri)` | `context.replace(route)` / `replaceSilently` |
 | `state.pathParameters['id']` | typed constructor via `parse` (`p('id')`) |
 | `GoRouterState.uri` | `router.uriOf(route)` (reverse) |
+| `GoRouter.of(context).state` | `router.current` (a `ValueListenable`) |
 | `observers:` | `observers:` (a factory — see above) |
 | `.gr.dart` / `build_runner` | nothing — plain `sealed` classes |
 

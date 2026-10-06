@@ -13,15 +13,17 @@ typedef RakuPageBuilder = Page<Object?> Function(
 /// A UI-agnostic [Page] with a configurable transition.
 ///
 /// Deliberately does **not** depend on Material or Cupertino, so the package
-/// stays usable from any design system. Pick a transition from
-/// [RakuTransitions] or supply your own [RouteTransitionsBuilder].
+/// stays usable from any design system. Defaults to the premium
+/// [RakuTransitions.slideIn] — the same default as everywhere in raku_router;
+/// pick another from [RakuTransitions] or supply your own
+/// [RouteTransitionsBuilder].
 class RakuPage<T> extends Page<T> {
   /// Creates a page presenting [child] with the given transition and durations.
   const RakuPage({
     required this.child,
-    this.transitionsBuilder = RakuTransitions.fade,
-    this.transitionDuration = const Duration(milliseconds: 250),
-    this.reverseTransitionDuration = const Duration(milliseconds: 200),
+    this.transitionsBuilder,
+    this.transitionDuration = RakuTransitions.slideInDuration,
+    this.reverseTransitionDuration = RakuTransitions.slideInReverseDuration,
     super.key,
     super.name,
     super.arguments,
@@ -31,8 +33,8 @@ class RakuPage<T> extends Page<T> {
   /// The screen content.
   final Widget child;
 
-  /// How the page animates in and out.
-  final RouteTransitionsBuilder transitionsBuilder;
+  /// How the page animates in and out; null uses [RakuTransitions.slideIn].
+  final RouteTransitionsBuilder? transitionsBuilder;
 
   /// Forward transition duration.
   final Duration transitionDuration;
@@ -84,7 +86,9 @@ class _RakuPageRoute<T> extends PageRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return _page.transitionsBuilder(
+    final builder =
+        _page.transitionsBuilder ?? RakuTransitions._defaultTransition;
+    return builder(
       context,
       animation,
       secondaryAnimation,
@@ -95,6 +99,9 @@ class _RakuPageRoute<T> extends PageRoute<T> {
 
 /// A small set of Material/Cupertino-free transition builders.
 abstract final class RakuTransitions {
+  // The package-wide default: a right-edge [slideIn], built once and shared.
+  static final RouteTransitionsBuilder _defaultTransition = slideIn();
+
   /// No animation — the new page appears instantly.
   static Widget none(
     BuildContext context,

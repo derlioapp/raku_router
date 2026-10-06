@@ -119,13 +119,6 @@ void main() {
     expect(s.current, const P('1'));
   });
 
-  test('sameDestination uses props', () {
-    expect(const P('1').sameDestination(const P('1')), isTrue);
-    expect(const P('1').sameDestination(const P('2')), isFalse);
-    expect(const A().sameDestination(const A()), isTrue);
-    expect(const A().sameDestination(const B()), isFalse);
-  });
-
   test('value equality from (runtimeType, props)', () {
     // Build via a runtime value so the instances can't be const-canonicalised —
     // this proves *value* equality of genuinely distinct objects.
@@ -139,9 +132,6 @@ void main() {
     expect(p1 == const P('2'), isFalse, reason: 'different props differ');
     expect(const A() == const A(), isTrue);
     expect(const A() == const B(), isFalse, reason: 'different runtimeType');
-
-    // sameDestination is now just a readable alias of ==.
-    expect(p1.sameDestination(p1b), p1 == p1b);
   });
 
   testWidgets('renders top route and reacts to push/pop', (tester) async {

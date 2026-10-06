@@ -83,10 +83,39 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
 - **Deep link + redirect compose** — a tab route that `RouteRedirect`s to a
   full-page route lands above the shell. (`tree_tabs_test`)
 
+## Navigation handle (no `BuildContext`) _(tree)_
+
+- **`router.go(route)` rebuilds the location like a deep link** — ancestors
+  become the back stack, the right tab is selected, redirects are followed; a
+  guard doesn't veto it (an app decision, e.g. sign-out). `context.go` is the
+  in-widget form; outside `raku()` it resets the nearest stack. (`router_api_test`)
+- **`router.push(route)` lands at the right level** (tab vs full-page).
+  (`router_api_test`)
+- **`router.current`** is a `ValueListenable` of the active leaf, in lock-step
+  with `onNavigation`. (`router_api_test`)
+- **`router.routeOf(uri)`** maps a URL to its typed route, `null` for unknown or
+  malformed ones, and never throws. (`untrusted_url_test`)
+- **A slow async redirect can't overwrite a newer navigation.** (`router_api_test`)
+
+## URLs are untrusted input _(tree)_
+
+- **A malformed deep link never crashes the app** — a `parse` that throws
+  (`int.parse`, `Enum.values.byName`) or invalid percent-encoding makes that
+  route a non-match; the URL falls through to a catch-all (which also catches a
+  malformed tail) or `onUnknown`. A 2000-URL fuzz test proves the parser and
+  `routeOf` never throw. (`untrusted_url_test`)
+- **Defined matching rules** — case-sensitive; trailing / doubled slashes
+  ignored; `#fragment` ignored; a repeated query key keeps its last value;
+  params percent-decoded in and re-encoded out. (`untrusted_url_test`)
+- **A redirect protects its whole subtree** — a deep link or `go` checks every
+  route on the rebuilt path, so `/admin/users/1` can't slip past a sign-in
+  redirect on `/admin`; loops across ancestors are detected.
+  (`ancestor_redirect_test`)
+
 ## Typed, object-based navigation
 
 - **Navigate by value, never by string** — `context.push(const Note('42'))`,
-  `context.pop()`, `context.replace(...)`. (`stack_view_test`, `route_kit_test`)
+  `context.pop()`, `context.replace(...)`. (`stack_view_test`, `raku_router_widget_test`)
 - **Reactive stack** (`RouteStack` is a `ValueListenable<List<route>>`): push /
   pop / replace / reset / setRoutes / popUntil, all notify listeners.
   (`raku_router_test`)
@@ -125,11 +154,18 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
 - **`slideIn` is the default** — direction-parametric (`from:` left/right/top/
   bottom), Material 3 emphasized easing on the incoming page, iOS-style parallax +
   subtle dim on the outgoing one. It owns its `CurvedAnimation`s (created once,
-  disposed). (`premium_slide_test`, `route_kit_test`)
+  disposed). (`premium_slide_test`, `raku_router_widget_test`)
 - **Per-route and global override**; disable with `RakuTransitions.none`.
-  (`route_kit_test`, `stack_view_test`)
+  (`raku_router_widget_test`, `stack_view_test`)
 - Also ships `none`, `fade`, `slide`, `riseUp`. (`page_transition_test`)
 - A route's own `RouteTransition` mixin overrides everything. (`page_transition_test`)
+
+## Overlays & system back
+
+- **System back closes an open dialog / bottom sheet first**, then pops pages —
+  for overlays on the root navigator, on a tab branch's navigator, and with a
+  plain `RouteStackView`; an overlay's own `PopScope` still vetoes it.
+  (`overlay_back_test`)
 
 ## Correctness & platform
 
@@ -146,7 +182,16 @@ green test; the package runs at **100% line coverage** on `lib/src`, warning-fre
 - **`onDidRemovePage` keeps the stack in sync** after an imperative
   `Navigator.pop`. (`page_transition_test`)
 - **Material/Cupertino-free `lib/`** (CI-guarded) — drops into any design system.
-- **Clear, `Raku:`-prefixed assertion contract** for misuse (empty stack,
+- **Browser back/forward honours guards** — a URL change that would remove a
+  guarded page is vetoed (`onPopBlocked` runs with a context in the page's own
+  stack; the address bar is re-reported), while switching tabs by URL — which
+  keeps the page alive — goes through. (`web_back_guard_test`)
+- **Title fallback** — `raku(title:)` labels routes without their own `title:`,
+  so the tab label never goes stale. (`title_test`)
+- **One default transition** — `RouteStackView`, `BranchedStackView` and
+  `RakuPage` default to `slideIn`, like `raku(...)`. (`page_transition_test`)
+- **Clear, `Raku:`-prefixed assertion contract** for misuse (a route type
+  declared twice, empty stack,
   out-of-range tab index, missing scope, multi-param URL without `encode`, more
   than one top-level `tabs()` shell). (`error_contract_test`, `route_node_test`)
 - **No leaks** — controllers, HeroControllers, and listeners are disposed; proven

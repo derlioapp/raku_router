@@ -17,8 +17,14 @@
 /// [BranchedRouteStack], [BranchedStackView], [RouteBranch], and the route
 /// mixins [RouteGuard] / [RouteRedirect] / [RouteTransition]. The **framework
 /// plumbing** you rarely name directly carries the `Raku` prefix —
-/// [RakuRoute], [RakuPage], [RakuTransitions], [RakuEntry], and
+/// [RakuRoute], [RakuRouter], [RakuPage], [RakuTransitions], [RakuEntry], and
 /// the `Raku*` typedefs. (`RakuGuard` would only add noise.)
+///
+/// ## Public surface
+///
+/// Everything exported here is the supported API. The route tree's matching
+/// machinery and the view plumbing live under `src/` and are deliberately not
+/// exported; value types are `final` so they can grow without breaking you.
 ///
 /// ## Errors & assertions
 ///
@@ -27,7 +33,8 @@
 /// builds with a `Raku:`-prefixed, actionable message. In release builds
 /// these assertions are stripped — where a sane fallback exists it is taken
 /// rather than crashing: a redirect loop stops at the last resolved route
-/// instead of spinning. Guards and redirects are *control flow*, not errors —
+/// instead of spinning. URLs are untrusted input: a malformed or unknown one
+/// falls back to `onUnknown`, never throws. Guards and redirects are *control flow*, not errors —
 /// a vetoed pop simply returns `false`.
 library;
 
@@ -37,8 +44,9 @@ library;
 export 'src/branch.dart';
 export 'src/page.dart';
 export 'src/route.dart';
-export 'src/router/route_node.dart';
+export 'src/router/route_node.dart'
+    hide RouteMatch, RouteTree, ScreenMatch, TabsMatch;
 export 'src/router/route_params.dart';
 export 'src/router/tree_router.dart';
-export 'src/stack.dart';
-export 'src/stack_view.dart';
+export 'src/stack.dart' hide reconcileStack, removeStackPage, resolveRedirects;
+export 'src/stack_view.dart' hide RakuNavigator, navigatorOfStack, popOverlay;

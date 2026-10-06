@@ -42,12 +42,6 @@ abstract class RakuRoute {
   /// Human-readable name, surfaced as the page name for debugging/observers.
   String get name => runtimeType.toString();
 
-  /// Whether [other] points at the same destination as this route.
-  ///
-  /// Identical to `this == other`; kept as a named alias because it reads
-  /// clearly at redirect/loop-detection call sites.
-  bool sameDestination(RakuRoute other) => this == other;
-
   /// Value equality from `(runtimeType, props)`: two routes of the same type
   /// with equal [props] are equal, even when they are distinct (non-const)
   /// instances. Page identity on a [RouteStack] is tracked separately (by a

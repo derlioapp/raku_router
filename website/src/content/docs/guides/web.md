@@ -39,6 +39,10 @@ encode the active path). But **within a session**, browser back/forward preserve
 inactive tabs' history and the element state of unchanged screens — verified by a
 back/forward sequence test.
 
+A guarded screen (say, an editor with unsaved changes) vetoes a back/forward that
+would close it: its `onPopBlocked` runs and the address bar is put back — see
+[Guards & redirects](/raku_router/guides/guards-redirects/).
+
 ## Route → URL (links & sharing)
 
 `raku(...)` returns a `RakuRouter` — a `RouterConfig` that also exposes the tree's
@@ -68,11 +72,34 @@ route('notes/:id', (p) => Note(p('id')), (n) => NoteScreen(id: n.id),
     title: (n) => 'Note ${n.id}');
 ```
 
-It's opt-in and per-route: a route with no `title:` leaves the label untouched,
-and if you declare none the platform is never called. Under the hood it uses the
+Give `raku(title: ...)` a fallback for routes that declare none — otherwise
+leaving a titled route for an untitled one keeps the old label:
+
+```dart
+raku(initial: const Home(), routes: [...], title: (_) => 'My App');
+```
+
+It's opt-in: with no `title:` anywhere and no fallback, the platform is never
+called. Under the hood it uses the
 same `SystemChrome.setApplicationSwitcherDescription` call as Flutter's `Title`
 widget — and because raku sets it deeper in the tree, it wins over
 `MaterialApp.title`.
+
+## URL matching rules
+
+- Matching is **case-sensitive** — `/Notes/1` doesn't match `notes/:id`.
+- A trailing slash and doubled slashes are ignored — `/notes/1/` = `/notes/1`.
+- The `#fragment` is ignored and isn't round-tripped.
+- A repeated query key keeps its **last** value — `?q=a&q=b` reads `b`.
+- Params are percent-decoded on the way in and re-encoded on the way out.
+
+:::caution[URLs are untrusted input]
+Anyone can send your app a link. A URL that matches nothing, isn't valid
+percent-encoding, or makes your `parse` throw (`p.asInt('id')` on `/notes/abc`)
+never crashes the app: that route just doesn't match, and the URL falls through
+to a catch-all `route('*', …)` or `onUnknown`. Still treat the typed values as
+untrusted in your screens, like form input.
+:::
 
 ## Transient URL state (no history spam)
 

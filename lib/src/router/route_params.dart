@@ -3,7 +3,7 @@
 ///
 /// Passed to a route's `parse` function so it can build a typed route object,
 /// e.g. `(p) => Note(p('id'))` or `(p) => Search(p.query('q') ?? '')`.
-class RouteParams {
+final class RouteParams {
   /// Wraps the captured path [_values] and the URL's [_query] parameters.
   RouteParams(this._values, [this._query = const <String, String>{}]);
 
@@ -53,7 +53,7 @@ class RouteParams {
 /// route('/search', (p) => Search(p.query('q') ?? ''), (s) => SearchScreen(s),
 ///     encode: (s) => RoutePath(const {}, query: {'q': s.term}));
 /// ```
-class RoutePath {
+final class RoutePath {
   /// Builds a location from its path [params] and optional [query] parameters.
   const RoutePath(this.params, {this.query = const <String, String>{}});
 

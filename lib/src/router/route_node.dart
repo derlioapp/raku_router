@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../branch.dart';
@@ -24,9 +25,8 @@ sealed class RouteNode {}
 /// Nesting is structural — a child's URL extends its parent's, and a deep URL
 /// produces the whole ancestor chain as the navigation stack, so a deep link
 /// reconstructs back history the way a web router does.
-class ScreenNode extends RouteNode {
-  /// Prefer the [route] helper, which infers [type] and wraps the typed screen.
-  ScreenNode({
+final class ScreenNode extends RouteNode {
+  ScreenNode._({
     required this.path,
     required this.type,
     required this.parse,
@@ -68,9 +68,8 @@ class ScreenNode extends RouteNode {
 /// A tabs shell: preserved parallel [branches] rendered through a [shell]. The
 /// active branch is determined by the URL; the others keep their state. Created
 /// with [tabs]; a `TabsNode` may itself appear inside a branch (nested tabs).
-class TabsNode extends RouteNode {
-  /// Wraps [branches] (each a list of [RouteNode]s) in a [shell].
-  TabsNode({required this.shell, required this.branches})
+final class TabsNode extends RouteNode {
+  TabsNode._({required this.shell, required this.branches})
       : assert(
           branches.isNotEmpty,
           'Raku: tabs() needs at least one branch.',
@@ -114,7 +113,7 @@ ScreenNode route<R extends RakuRoute>(
   RouteTransitionsBuilder? transition,
   String Function(R route)? title,
 }) {
-  return ScreenNode(
+  return ScreenNode._(
     path: path,
     type: R,
     parse: parse,
@@ -131,7 +130,7 @@ RouteNode tabs({
   required RouteShellBuilder shell,
   required List<List<RouteNode>> branches,
 }) =>
-    TabsNode(shell: shell, branches: branches);
+    TabsNode._(shell: shell, branches: branches);
 
 /// A resolved navigation entry: a screen or a tabs shell. A matched URL is a
 /// *stack* of these (`List<RouteMatch>`).
@@ -191,6 +190,12 @@ class RouteTree {
       switch (node) {
         case ScreenNode():
           final full = _join(parent, node.path);
+          assert(
+            !_patternByType.containsKey(node.type),
+            'Raku: ${node.type} is declared by more than one route(...) '
+            '("${_patternByType[node.type]?.template}" and "$full"). A route '
+            'type maps to exactly one URL — give each its own class.',
+          );
           _patternByType[node.type] = PathPattern(full);
           _nodeByType[node.type] = node;
           if (!inTabs) _rootLevelTypes.add(node.type);
@@ -217,6 +222,13 @@ class RouteTree {
   /// wildcard, and the deepest matching wildcard (a subtree `/feed/*`) beats a
   /// shallower one (a top-level `/*`); if neither pass matches, `match` returns
   /// null and the caller's global `onUnknown` takes over.
+  ///
+  /// URLs are untrusted input (the address bar, a deep link, a push payload),
+  /// so this never throws on a bad one: a `parse` that rejects its params —
+  /// `p.asInt('id')` on `/notes/abc`, `Enum.values.byName(...)` on an unknown
+  /// name — makes that route a non-match, and matching moves on (typically to
+  /// a catch-all). Assertion failures, a programming error in the tree, still
+  /// surface.
   List<RouteMatch>? match(Uri uri) =>
       _matchAt(uri, allowCatchAll: false) ?? _matchAt(uri, allowCatchAll: true);
 
@@ -270,9 +282,19 @@ class RouteTree {
     final chain = _screenChain(node, parent, uri, allowCatchAll);
     if (chain == null) return null;
     final params = RouteParams(chain.params, uri.queryParameters);
-    return <RouteMatch>[
-      for (final n in chain.nodes) ScreenMatch(n, n.parse(params)),
-    ];
+    try {
+      return <RouteMatch>[
+        for (final n in chain.nodes) ScreenMatch(n, n.parse(params)),
+      ];
+    } on AssertionError {
+      rethrow;
+    } on Object catch (error) {
+      if (kDebugMode) {
+        debugPrint('Raku: "$uri" was rejected by the parse of '
+            '${chain.nodes.last.type} ($error); trying other routes.');
+      }
+      return null;
+    }
   }
 
   ({List<ScreenNode> nodes, Map<String, String> params})? _screenChain(

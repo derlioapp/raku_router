@@ -7,7 +7,7 @@ import 'route.dart';
 /// One entry on a [RouteStack]: a route plus a process-unique id used to derive
 /// a stable [pageKey].
 @immutable
-class RakuEntry {
+final class RakuEntry {
   /// Wraps [route] with a fresh process-unique [id].
   RakuEntry(this.route) : id = _nextId++;
 
@@ -125,7 +125,7 @@ class RouteStack extends ChangeNotifier
   /// you already are (e.g. tapping the current folder in the sidebar again)
   /// shouldn't tear down and rebuild the screen.
   void reset(RakuRoute route) {
-    if (_entries.length == 1 && current.sameDestination(route)) return;
+    if (_entries.length == 1 && current == route) return;
     setRoutes(<RakuRoute>[route]);
   }
 
@@ -141,15 +141,12 @@ class RouteStack extends ChangeNotifier
     notifyListeners();
   }
 
-  /// Updates the stack to [routes], reusing the existing entry — and thus its
-  /// page key and element state — for the longest unchanged prefix (matched by
-  /// [RakuRoute.sameDestination]); fresh entries back the rest.
-  ///
-  /// Unlike [setRoutes], which re-keys every entry, this is how a platform URL
-  /// change (browser back/forward, a deep link) is applied without tearing down
-  /// pages that didn't change: a shell, or a screen still present at the same
-  /// depth, keeps its state instead of being rebuilt from scratch.
-  void reconcileRoutes(List<RakuRoute> routes) {
+  // Updates the stack to [routes], reusing the existing entry — and thus its
+  // page key and element state — for the longest unchanged prefix (matched by
+  // `==`); fresh entries back the rest. Unlike [setRoutes], which re-keys every
+  // entry, this is how a platform URL change (browser back/forward, a deep
+  // link) is applied without tearing down pages that didn't change.
+  void _reconcileRoutes(List<RakuRoute> routes) {
     assert(
       routes.isNotEmpty,
       'Raku: a RouteStack needs at least one route.',
@@ -157,9 +154,7 @@ class RouteStack extends ChangeNotifier
     final next = <RakuEntry>[];
     var diverged = false;
     for (var i = 0; i < routes.length; i++) {
-      if (!diverged &&
-          i < _entries.length &&
-          _entries[i].route.sameDestination(routes[i])) {
+      if (!diverged && i < _entries.length && _entries[i].route == routes[i]) {
         next.add(_entries[i]);
       } else {
         diverged = true;
@@ -183,23 +178,16 @@ class RouteStack extends ChangeNotifier
     if (changed) notifyListeners();
   }
 
-  /// Removes the entry backing [pageKey], if still present.
-  ///
-  /// The view calls this from `Navigator.onDidRemovePage` so the stack stays in
-  /// sync when the framework removes a page (e.g. an imperative
-  /// `Navigator.pop` inside a screen). Idempotent and never removes the root.
-  void handlePageRemoved(Object? pageKey) {
+  // Removes the entry backing [pageKey], if still present. The view calls this
+  // from `Navigator.onDidRemovePage` so the stack stays in sync when the
+  // framework removes a page (e.g. an imperative `Navigator.pop` inside a
+  // screen). Idempotent and never removes the root.
+  void _handlePageRemoved(Object? pageKey) {
     final index = _entries.indexWhere((e) => e.pageKey == pageKey);
     if (index <= 0) return;
     _entries.removeAt(index);
     notifyListeners();
   }
-
-  /// Follows [route]'s [RouteRedirect] chain (loop-protected) to its final
-  /// destination. `push`/`replace` apply this automatically; the router uses it
-  /// to resolve a route entered via a URL before showing it.
-  Future<RakuRoute> resolve(RakuRoute route) =>
-      Future<RakuRoute>.value(_resolve(route));
 
   // Returns synchronously for a non-redirect route (the common case); only a
   // route that mixes in RouteRedirect follows the (async) chain.
@@ -207,23 +195,45 @@ class RouteStack extends ChangeNotifier
     if (route is! RouteRedirect) return route;
     return _resolveRedirect(route);
   }
+}
 
-  Future<RakuRoute> _resolveRedirect(RakuRoute route) async {
-    var current = route;
-    final visited = <RakuRoute>[];
-    while (current is RouteRedirect) {
-      final next = await current.redirect();
-      if (next == null || next.sameDestination(current)) break;
-      if (visited.any((seen) => seen.sameDestination(next))) {
-        assert(
-          false,
-          'Raku: redirect loop detected ending at ${next.runtimeType}.',
-        );
-        break;
-      }
-      visited.add(current);
-      current = next;
+// ---------------------------------------------------------------------------
+// Package-internal helpers. Hidden from the public library (`raku_router.dart`
+// hides them), so they aren't part of the API surface; the view and router
+// layers import this file directly.
+// ---------------------------------------------------------------------------
+
+/// Applies a platform URL change to [stack] in place, keeping the entries (and
+/// element state) of the longest unchanged prefix. Package-internal.
+void reconcileStack(RouteStack stack, List<RakuRoute> routes) =>
+    stack._reconcileRoutes(routes);
+
+/// Removes the entry backing [pageKey] from [stack] after the framework removed
+/// its page. Package-internal.
+void removeStackPage(RouteStack stack, Object? pageKey) =>
+    stack._handlePageRemoved(pageKey);
+
+/// Follows [route]'s [RouteRedirect] chain (loop-protected) to its final
+/// destination. Package-internal: the router uses it to resolve a route entered
+/// via a URL or `go` before showing it.
+Future<RakuRoute> resolveRedirects(RakuRoute route) =>
+    route is RouteRedirect ? _resolveRedirect(route) : Future.value(route);
+
+Future<RakuRoute> _resolveRedirect(RakuRoute route) async {
+  var current = route;
+  final visited = <RakuRoute>[];
+  while (current is RouteRedirect) {
+    final next = await current.redirect();
+    if (next == null || next == current) break;
+    if (visited.contains(next)) {
+      assert(
+        false,
+        'Raku: redirect loop detected ending at ${next.runtimeType}.',
+      );
+      break;
     }
-    return current;
+    visited.add(current);
+    current = next;
   }
+  return current;
 }

@@ -34,9 +34,27 @@ raku(routes: [
 `context.push(const Photo('9'))` covers the bar; back returns to the preserved
 shell. `context.push` is **level-routed** automatically — you don't choose.
 
+## From a push notification (no `BuildContext`)
+
+A notification carries a URL or path. Resolve it with the router you got from
+`raku(...)` — `routeOf` returns `null` for anything your tree doesn't know, and
+never throws on garbage — then `go` there so the back stack is rebuilt like a
+deep link:
+
+```dart
+onNotificationTap((String payload) {
+  final route = router.routeOf(Uri.tryParse(payload) ?? Uri());
+  if (route != null) router.go(route); // /feed/notes/42 → [Feed, Note(42)]
+});
+```
+
+Use `router.push(route)` instead to open it on top of where the user already is.
+
 **Notes**
 
 - Typed params arrive through your constructor: `(p) => Note(p('id'))`, plus
-  `p.asInt('id')` and `p.query('q')`.
+  `p.asInt('id')` and `p.query('q')`. If `parse` throws on a bad value
+  (`/feed/notes/abc` with `asInt`), the route simply doesn't match — the link
+  falls through to your 404 / `onUnknown` instead of crashing.
 - Need a multi-`:param` or `?query` URL to round-trip? Add an
   [`encode:`](/raku_router/concepts/url-and-stack/).

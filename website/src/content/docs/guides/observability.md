@@ -20,6 +20,19 @@ This is deliberately minimal — one callback, consistent with raku_router's
 typed-navigation thesis. It already covers **every** navigator (the root and each
 tab branch), so for plain route-name analytics you rarely need anything else.
 
+## Binding UI to the current route
+
+`router.current` is a `ValueListenable<RakuRoute>` of the active leaf — the same
+value `onNavigation` reports — for widgets that should react to where the user
+is, such as a custom side menu highlighting its active item:
+
+```dart
+ValueListenableBuilder<RakuRoute>(
+  valueListenable: router.current,
+  builder: (context, route, _) => SideMenu(selected: route),
+);
+```
+
 ## Raw `NavigatorObserver`s
 
 Some packages want the raw `Route` lifecycle rather than a route name —

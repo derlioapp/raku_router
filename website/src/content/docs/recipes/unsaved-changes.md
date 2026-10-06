@@ -44,6 +44,9 @@ class Editor extends AppRoute with RouteGuard {
 
 - raku_router wraps a guarded screen in a `PopScope`, so the guard is honoured by the
   predictive-back gesture, an imperative `Navigator.pop`, the system back button,
-  and the Router's `popRoute` — `onPopBlocked` fires on all of them.
+  the Router's `popRoute`, and the browser's back/forward buttons on the web —
+  `onPopBlocked` fires on all of them.
+- The `context` you get belongs to the editor's own stack, so `context.pop()`
+  after confirming closes the editor even inside a tab.
 - For redirecting *into* a screen (e.g. auth), use a
   [redirect](/raku_router/recipes/auth-gate/) instead.

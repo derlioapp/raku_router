@@ -1,5 +1,6 @@
 // API-04 — error & assertion contract: programmer errors assert in debug with
 // a `Raku:`-prefixed message; control flow (guards) is not an error.
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:raku_router/raku_router.dart';
 
@@ -49,5 +50,18 @@ void main() {
     await s.push(const Guarded(allow: false));
     expect(await s.pop(), isFalse); // returns false, never throws
     expect(s.length, 2);
+  });
+
+  test('a route type declared twice is rejected (it maps to one URL)', () {
+    expect(
+      () => raku(
+        initial: const Home(),
+        routes: [
+          route('/a', (_) => const Home(), (_) => const SizedBox()),
+          route('/b', (_) => const Home(), (_) => const SizedBox()),
+        ],
+      ),
+      _rakuAssertion,
+    );
   });
 }

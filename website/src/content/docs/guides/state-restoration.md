@@ -17,6 +17,13 @@ killed deep in the app returns to the same screen (the active path; inactive tab
 restore to their initial route, as with a cold link). Verified end-to-end with
 `restartAndRestore`, including a negative case without restoration.
 
+:::note[A deliberate limit]
+Only the **active** path is restored. Inactive tabs' in-app history lives in
+memory, not in the URL, so after process death they start at their initial
+route — the same as a cold deep link. Within a session (tab switches, browser
+back/forward) every tab keeps its history.
+:::
+
 ## Per-screen widget state
 
 To restore a *screen's* own widget state (a half-typed form, a scroll offset),
