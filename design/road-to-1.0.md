@@ -54,7 +54,7 @@ The one big piece of work left is field validation.
 - GitHub Actions pinned by SHA, CI runs with `permissions: contents: read`, the
   pana version is pinned, Dependabot (actions + pub, monthly).
 - [user · firm] **Publishing is manual** — the maintainer runs
-  `flutter pub publish` locally; no CI job publishes. Why: the maintainer wants
+  `dart pub publish` locally; no CI job publishes. Why: the maintainer wants
   to decide and run every release by hand.
 
 ### Releasing (manual)
@@ -63,10 +63,14 @@ The one big piece of work left is field validation.
 2. Clean `main` with CI green: `git status` empty; analyze
    (`--fatal-infos --fatal-warnings`), `flutter test`, `dart format` and
    `tool/check_forbidden_imports.sh` pass.
-3. `flutter pub publish --dry-run` → `Package has 0 warnings`, and the file
+3. `dart pub publish --dry-run` → `Package has 0 warnings`, and the file
    list holds no repo-only files (see `.pubignore`).
-4. `flutter pub publish`, then tag the published commit:
+4. `dart pub publish`, then tag the published commit:
    `git tag vX.Y.Z && git push origin vX.Y.Z`.
+   Use `dart pub`, not `flutter pub`: the `flutter` wrapper doesn't pass the
+   `y` answer of the confirmation prompt through to pub, so the upload hangs
+   silently. `dart pub publish --force` skips the prompt once the dry run is
+   clean.
 
 ## Remaining
 

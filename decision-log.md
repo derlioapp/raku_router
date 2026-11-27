@@ -15,3 +15,6 @@ Labels on rules: source `user` (stated or approved by the maintainer) or
 - 2026-11-27 · .gitignore / .pubignore · `feedback/` committed to git (kept
   out of the package) → ignored by both git and pub. Why: incoming app
   feedback is working material, not part of the repository. Source: user.
+- 2026-11-27 · design/road-to-1.0.md · Release command `flutter pub publish`
+  → `dart pub publish`. Why: the `flutter` wrapper didn't pass the
+  confirmation answer through, so publishing hung. Source: user.
