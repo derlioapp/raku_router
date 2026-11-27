@@ -1,0 +1,139 @@
+/* raku_router docs — brand theme + home-page (demo-forward) styles.
+   Accent is a single variable; change --rk-accent to rebrand. */
+:root {
+	--rk-accent: 124 58 237; /* violet-600 (R G B) — derlio accent */
+	--sl-color-accent-low: rgb(var(--rk-accent) / 0.18);
+	--sl-color-accent: rgb(var(--rk-accent));
+	--sl-color-accent-high: rgb(167 139 250); /* violet-300 for contrast */
+	--sl-color-text-accent: rgb(167 139 250);
+}
+:root[data-theme='light'] {
+	--sl-color-accent-high: rgb(91 33 182); /* violet-800 */
+	--sl-color-text-accent: rgb(109 40 217);
+}
+
+/* ---- Home hero: two columns (pitch | live demo), stacks on mobile ---- */
+.rk-hero {
+	display: grid;
+	grid-template-columns: 1.1fr 0.9fr;
+	gap: 3rem;
+	align-items: center;
+	margin-block: 1rem 3rem;
+}
+.rk-hero h1 {
+	font-size: clamp(2.2rem, 5vw, 3.4rem);
+	line-height: 1.05;
+	margin: 0 0 0.6rem;
+	letter-spacing: -0.02em;
+}
+.rk-hero .rk-tagline {
+	font-size: 1.15rem;
+	color: var(--sl-color-gray-2);
+	max-width: 34ch;
+	margin: 0 0 1.6rem;
+}
+.rk-cta {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.rk-cta a {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.65rem 1.1rem;
+	border-radius: 999px;
+	font-weight: 600;
+	text-decoration: none;
+	border: 1px solid var(--sl-color-gray-5);
+}
+.rk-cta a.primary {
+	background: var(--sl-color-accent);
+	color: white;
+	border-color: transparent;
+}
+.rk-cta a.primary:hover {
+	filter: brightness(1.08);
+}
+.rk-cta a.ghost:hover {
+	background: var(--sl-color-gray-6);
+}
+
+/* ---- Phone frame holding the live Flutter demo ---- */
+.rk-phone {
+	justify-self: center;
+	width: 100%;
+	max-width: 300px;
+	aspect-ratio: 9 / 18;
+	border: 10px solid var(--sl-color-gray-6);
+	outline: 1px solid var(--sl-color-gray-5);
+	border-radius: 36px;
+	overflow: hidden;
+	box-shadow: 0 24px 60px -20px rgb(var(--rk-accent) / 0.45);
+	background: var(--sl-color-black);
+}
+.rk-phone iframe {
+	width: 100%;
+	height: 100%;
+	border: 0;
+	display: block;
+}
+
+@media (max-width: 50rem) {
+	.rk-hero {
+		grid-template-columns: 1fr;
+		text-align: center;
+	}
+	.rk-hero .rk-tagline {
+		margin-inline: auto;
+	}
+	.rk-cta {
+		justify-content: center;
+	}
+}
+
+/* ---- Concept diagrams: boxes + arrows, no dependencies ---- */
+.rk-flow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 0.75rem;
+	justify-content: center;
+	margin-block: 1.5rem;
+	padding: 1.25rem;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 12px;
+	background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+}
+.rk-flow .box {
+	padding: 0.5rem 0.9rem;
+	border-radius: 8px;
+	border: 1px solid var(--sl-color-gray-4);
+	background: var(--sl-color-bg);
+	font-weight: 600;
+	font-size: 0.95rem;
+	white-space: nowrap;
+}
+.rk-flow .box.accent {
+	border-color: var(--sl-color-accent);
+	box-shadow: inset 0 0 0 1px var(--sl-color-accent);
+}
+.rk-flow .box.url {
+	font-family: var(--sl-font-mono, monospace);
+	font-weight: 500;
+}
+.rk-flow .arrow {
+	color: var(--sl-color-text-accent);
+	font-weight: 700;
+}
+.rk-flow .stack {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+.rk-flow .note {
+	flex-basis: 100%;
+	text-align: center;
+	color: var(--sl-color-gray-3);
+	font-size: 0.85rem;
+}

@@ -1,0 +1,39 @@
+name: raku_router
+description: >-
+  A tiny, code-generation-free, UI-agnostic router for Flutter: type-safe sealed
+  routes, declarative deep linking, and built-in nested tabs with per-branch
+  back stacks.
+version: 0.3.1
+
+homepage: https://derlioapp.github.io/raku_router/
+repository: https://github.com/derlioapp/raku_router
+issue_tracker: https://github.com/derlioapp/raku_router/issues
+topics:
+  - router
+  - navigation
+  - deep-linking
+  - tabs
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  material_ui: ^1.11.1
+
+flutter:

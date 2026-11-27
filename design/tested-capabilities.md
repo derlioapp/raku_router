@@ -1,0 +1,198 @@
+# raku_router — what works, and is tested
+
+A list of the capabilities the test suite **proves**. Every item below has a
+green test; the package runs at **100% line coverage** on `lib/src`, warning-free
+`dart doc`, and a CI guard that forbids Material/Cupertino in `lib/`.
+
+> The router is a nested **route tree** — `raku(routes: [route()/tabs()])` is
+> the single entry point. Items tagged _(tree)_ are the web-grade routing model;
+> the rest are the core primitives the tree is built on. Test files are named in
+> parentheses.
+
+## Web-grade deep linking _(tree)_
+
+- **A URL's path structure reconstructs the navigation stack.** Deep-linking to
+  `/feed/notes/42` rebuilds `[Feed, Note(42)]`, so **back returns to Feed**, not a
+  rootless screen — end-to-end through the real router (`raku_router`), for both
+  a plain screen tree **and a tab branch**. (`route_node_test`, `tree_router_test`,
+  `tree_tabs_test`)
+- **A deep link reconstructs the stack *inside the correct tab*** — `/feed/notes/42`
+  selects the feed tab and rebuilds its branch stack to `[Feed, Note(42)]`; back
+  pops within the tab. (`tree_tabs_test`)
+- **Switching tabs rewrites the address bar** — `tabs.go(1)` makes the active
+  configuration (and URL) the other branch's location. (`tree_tabs_test`)
+- **Route → URL is automatic and round-trips.** `Note('42')` ↔ `/feed/notes/42`
+  via the node's full path; parse/restore round-trip. (`route_node_test`,
+  `tree_router_test`)
+- **Multi-`:param` and `?query` URLs round-trip via `encode:`** — `RoutePath`
+  builds both a multi-parameter path and its query string, the inverse of `parse`,
+  so query-backed routes don't lose state on route → URL. (`route_node_test`)
+- **Arbitrary nesting depth** — a child's URL extends its parent's; the whole
+  ancestor chain becomes the stack. (`route_node_test`)
+- **Typed path params, no stringly access** — `(p) => Note(p('id'))`; plus
+  `p.asInt('id')`, `p.optionalInt`, and `?query` via `p.query('q')`.
+  (`route_params_test`, `route_node_test`)
+- **Unknown URLs fall back** through `onUnknown`. (`tree_router_test`)
+- **Catch-all `*` routes (typed 404)** — a trailing `*` matches any URL no
+  concrete route claims: concrete beats wildcard, the most-specific wildcard
+  wins, else it falls through to `onUnknown`. Scoped under a subtree it renders
+  inside that tab; at the top level it's global. The unmatched tail arrives typed
+  via `RouteParams.rest`, and the route round-trips so the 404 URL is preserved.
+  (`catch_all_test`, `path_pattern_test`)
+- **Route → URL is public** — `raku(...)` returns a `RakuRouter` exposing
+  `uriOf(route)` / `hrefOf(route)` (the tree's reverse direction) for share
+  links, deep links, and `<a href>`s. (`href_test`)
+- **No code generation** — routes are sealed classes + an exhaustive `switch`.
+
+## Tabs (preserved, parallel branches) _(tree)_
+
+- **Each tab keeps its own back stack** across switches; switching away and back
+  returns you exactly where you were. (`branch_test`, `branched_view_test`)
+- **A deep link resolves to the right tab and rebuilds that branch's stack**; on a
+  *cold* link the other branches sit at their initial route. (`route_node_test`)
+- **State survives platform URL changes** — a browser back/forward (or any
+  platform URL change) reconciles the live tree in place: the active path follows
+  the URL while inactive tabs keep their in-app history and unchanged screens keep
+  their element state (proven with a stateful counter that would reset on a
+  rebuild). (`reconcile_state_test`)
+- **Nested tabs** — tabs inside a tab — resolve recursively and **render, switch,
+  and preserve** their inner state. (`route_node_test`)
+- **Tabs build lazily and are then cached** — a tab's `Navigator` is created the
+  first time it is shown (not up front), then kept alive: revisiting it, or
+  navigating in another tab, never rebuilds it (proven by build-counting).
+  (`branched_view_test`)
+- **Nested navigation animates only the content area** — the shell (bottom bar
+  *or* side menu) stays fixed; proven for both layouts by measuring positions.
+  (`branched_view_test`)
+- **Each tab gets its own `HeroController`**, so heroes work within a tab.
+  (`branched_view_test`)
+- **`tabs.go(index)`** switches tabs; `reset(initial)` re-roots a tab (the
+  primitive behind "tap the active tab → pop to root").
+
+## Full-page routes over a tab shell _(tree)_
+
+- **Top-level routes sit in a root navigator above the shell** — they cover the
+  bar/menu and the whole page animates; the tab shell stays underneath at its
+  initial state. Proven through the real tree router: `context.push` of a
+  top-level route covers the shell and back returns to the preserved tab.
+  (`route_node_test`, `tree_tabs_test`)
+- **`context.push(route)` routes to the right level automatically** from where the
+  route is declared (in a tab vs. top-level) — a tab route lands in the active
+  tab's stack, a top-level route lands full-page above the shell.
+  (`tree_tabs_test`)
+- **Deep link + redirect compose** — a tab route that `RouteRedirect`s to a
+  full-page route lands above the shell. (`tree_tabs_test`)
+
+## Navigation handle (no `BuildContext`) _(tree)_
+
+- **`router.go(route)` rebuilds the location like a deep link** — ancestors
+  become the back stack, the right tab is selected, redirects are followed; a
+  guard doesn't veto it (an app decision, e.g. sign-out). `context.go` is the
+  in-widget form; outside `raku()` it resets the nearest stack. (`router_api_test`)
+- **`router.push(route)` lands at the right level** (tab vs full-page).
+  (`router_api_test`)
+- **`router.current`** is a `ValueListenable` of the active leaf, in lock-step
+  with `onNavigation`. (`router_api_test`)
+- **`router.routeOf(uri)`** maps a URL to its typed route, `null` for unknown or
+  malformed ones, and never throws. (`untrusted_url_test`)
+- **A slow async redirect can't overwrite a newer navigation.** (`router_api_test`)
+
+## URLs are untrusted input _(tree)_
+
+- **A malformed deep link never crashes the app** — a `parse` that throws
+  (`int.parse`, `Enum.values.byName`) or invalid percent-encoding makes that
+  route a non-match; the URL falls through to a catch-all (which also catches a
+  malformed tail) or `onUnknown`. A 2000-URL fuzz test proves the parser and
+  `routeOf` never throw. (`untrusted_url_test`)
+- **Defined matching rules** — case-sensitive; trailing / doubled slashes
+  ignored; `#fragment` ignored; a repeated query key keeps its last value;
+  params percent-decoded in and re-encoded out. (`untrusted_url_test`)
+- **A redirect protects its whole subtree** — a deep link or `go` checks every
+  route on the rebuilt path, so `/admin/users/1` can't slip past a sign-in
+  redirect on `/admin`; loops across ancestors are detected.
+  (`ancestor_redirect_test`)
+
+## Typed, object-based navigation
+
+- **Navigate by value, never by string** — `context.push(const Note('42'))`,
+  `context.pop()`, `context.replace(...)`. (`stack_view_test`, `raku_router_widget_test`)
+- **Reactive stack** (`RouteStack` is a `ValueListenable<List<route>>`): push /
+  pop / replace / reset / setRoutes / popUntil, all notify listeners.
+  (`raku_router_test`)
+- **`raku(onNavigation:)`** reports the active leaf as a typed `RakuRoute`
+  after every change that moves it (push, pop, tab switch, browser back/forward),
+  once per change, and not for the initial route. (`on_navigation_test`)
+- **`raku(observers:)`** attaches raw `NavigatorObserver`s (e.g.
+  `FirebaseAnalyticsObserver`) via a *factory*: called once per navigator (root +
+  each tab branch), each gets fresh instances — proven a branch's observer is
+  created only when its tab is first shown, and sees in-tab pushes. (`observers_test`)
+- **`context.replaceSilently(route)`** updates the address bar in place with no
+  new history entry (wrapping `Router.neglect`), degrading to `replace` when
+  there is no enclosing `Router`. (`replace_silently_test`)
+- **Value equality from `(runtimeType, props)`** with separate process-unique page
+  identity, so equal routes coexist on the stack. (`raku_router_test`)
+- **`reset` is idempotent** — re-rooting to the route you're already on doesn't
+  tear the screen down. (`raku_router_test`)
+
+## Guards, redirects (control flow on the route)
+
+- **Guards integrate with `PopScope`** — a synchronous `canPop` is honoured by the
+  **predictive-back gesture, an imperative `Navigator.pop`, the system back
+  button, and `context.pop()`**; `onPopBlocked` confirms (e.g. a dialog) and
+  `rebuildOn` re-evaluates as state changes. In Router (deep-link) mode the
+  discrete system back button is vetoed by a guard **and runs `onPopBlocked`**,
+  so the confirm hook fires on every back path. (`guard_popscope_test`,
+  `system_back_test`, `tree_router_test`, `router_system_back_test`)
+- **Redirects** are followed and **loop-protected**; they resolve on push *and* on
+  deep-link entry — including a tab route that redirects to a full-page route.
+  (`redirect_guard_test`, `tree_router_test`, `tree_tabs_test`)
+- A vetoed pop is **control flow, not an error** (returns `false`).
+  (`error_contract_test`)
+
+## Premium transitions
+
+- **`slideIn` is the default** — direction-parametric (`from:` left/right/top/
+  bottom), Material 3 emphasized easing on the incoming page, iOS-style parallax +
+  subtle dim on the outgoing one. It owns its `CurvedAnimation`s (created once,
+  disposed). (`premium_slide_test`, `raku_router_widget_test`)
+- **Per-route and global override**; disable with `RakuTransitions.none`.
+  (`raku_router_widget_test`, `stack_view_test`)
+- Also ships `none`, `fade`, `slide`, `riseUp`. (`page_transition_test`)
+- A route's own `RouteTransition` mixin overrides everything. (`page_transition_test`)
+
+## Overlays & system back
+
+- **System back closes an open dialog / bottom sheet first**, then pops pages —
+  for overlays on the root navigator, on a tab branch's navigator, and with a
+  plain `RouteStackView`; an overlay's own `PopScope` still vetoes it.
+  (`overlay_back_test`)
+
+## Correctness & platform
+
+- **State restoration** — with `restorationScopeId`, the tree router restores the
+  navigation location across process death; a fresh delegate is re-fed the saved
+  URL and reconstructs the stack (proven with `restartAndRestore`, plus a negative
+  case without restoration). The active tab is restored too. (`restoration_test`)
+- **System back** pops the active stack and **a guard vetoes it**.
+  (`system_back_test`)
+- **Browser tab titles** — `route(..., title: (route) => '…')` sets the active
+  leaf's tab / task-switcher label via `SystemChrome.setApplicationSwitcherDescription`
+  (the same call Flutter's `Title` widget makes), only when it changes. Opt-in:
+  the platform is untouched when no route declares a `title`. (`title_test`)
+- **`onDidRemovePage` keeps the stack in sync** after an imperative
+  `Navigator.pop`. (`page_transition_test`)
+- **Material/Cupertino-free `lib/`** (CI-guarded) — drops into any design system.
+- **Browser back/forward honours guards** — a URL change that would remove a
+  guarded page is vetoed (`onPopBlocked` runs with a context in the page's own
+  stack; the address bar is re-reported), while switching tabs by URL — which
+  keeps the page alive — goes through. (`web_back_guard_test`)
+- **Title fallback** — `raku(title:)` labels routes without their own `title:`,
+  so the tab label never goes stale. (`title_test`)
+- **One default transition** — `RouteStackView`, `BranchedStackView` and
+  `RakuPage` default to `slideIn`, like `raku(...)`. (`page_transition_test`)
+- **Clear, `Raku:`-prefixed assertion contract** for misuse (a route type
+  declared twice, empty stack,
+  out-of-range tab index, missing scope, multi-param URL without `encode`, more
+  than one top-level `tabs()` shell). (`error_contract_test`, `route_node_test`)
+- **No leaks** — controllers, HeroControllers, and listeners are disposed; proven
+  by the test harness's leak checks.

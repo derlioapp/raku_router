@@ -1,0 +1,76 @@
+---
+title: raku_router
+description: A tiny, code-generation-free, UI-agnostic router for Flutter — type-safe sealed routes, declarative deep linking, and built-in nested tabs with per-branch back stacks.
+template: splash
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="rk-hero not-content">
+	<div>
+		<h1>raku_router</h1>
+		<p class="rk-tagline">
+			A tiny, code-generation-free router for Flutter. Type-safe. Deep linking
+			that just works. Nested tabs with their own back stacks — built in.
+		</p>
+		<div class="rk-cta">
+			<a class="primary" href="/raku_router/getting-started/">Get started →</a>
+			<a class="ghost" href="https://pub.dev/packages/raku_router">pub.dev</a>
+			<a class="ghost" href="https://github.com/derlioapp/raku_router">GitHub</a>
+		</div>
+	</div>
+	<div class="rk-phone">
+		<iframe src="/raku_router/demo/index.html" title="raku_router live demo" loading="lazy"></iframe>
+	</div>
+</div>
+
+That's the real example app running in your browser — tap the tabs, open a note,
+push a full-page photo, and watch the **URL change** and **back/forward** work,
+each tab keeping its own history.
+
+## Why raku_router
+
+Every router pushes navigation complexity *somewhere* — `go_router` into
+redirects/shells, `auto_route` into a build step, Navigator 2.0 onto you.
+raku_router's bet: for most apps the real need is modest, and a small reactive core
+beats a big framework.
+
+<CardGrid>
+	<Card title="Type-safe, no codegen" icon="seti:dart">
+		Routes are plain `sealed` classes; an exhaustive `switch` is your route
+		table. No `build_runner`, no `.gr.dart`, no annotations.
+	</Card>
+	<Card title="Nested tabs built in" icon="list-format">
+		Each tab keeps its own persistent back stack — what `StatefulShellRoute`
+		does, but by default.
+	</Card>
+	<Card title="Deep linking from a tree" icon="puzzle">
+		A URL's *structure* reconstructs the navigation stack, both ways — and
+		browser back/forward preserves state.
+	</Card>
+	<Card title="No state / design-system dep" icon="approve-check">
+		The core only needs `flutter`. Drops into Material, Cupertino, or a custom
+		design system equally. WASM-ready.
+	</Card>
+</CardGrid>
+
+## Start here
+
+<CardGrid>
+	<Card title="Tutorial" icon="open-book">
+		[Build a notes app](/raku_router/tutorial/) step by step — tabs, a detail screen, a
+		guard, and deep linking.
+	</Card>
+	<Card title="Concepts" icon="setting">
+		[How it works](/raku_router/concepts/mental-model/): the mental model, URL ⇄ stack, and
+		how tabs preserve state.
+	</Card>
+	<Card title="Recipes" icon="rocket">
+		[Copy-paste solutions](/raku_router/recipes/bottom-nav/) for bottom-nav, auth gates,
+		deep links, and more.
+	</Card>
+	<Card title="API reference" icon="seti:dart">
+		The full [dartdoc on pub.dev](https://pub.dev/documentation/raku_router/latest/)
+		— every public symbol documented.
+	</Card>
+</CardGrid>
